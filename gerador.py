@@ -7,6 +7,7 @@ horários: agora vêm do cadastro da empresa (empresas.py).
 
 import calendar
 import random
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -25,9 +26,22 @@ from empresas import (
 # =====================================
 # CONFIGURAÇÕES
 # =====================================
-PASTA_BASE = Path(__file__).resolve().parent
-ARQUIVO_MODELO = PASTA_BASE / "modelo" / "MODELO - CARTÃO PONTO.xlsx"
-PASTA_SAIDA = PASTA_BASE / "cartoes"
+def _pasta_do_programa():
+    """Onde ficam os arquivos do sistema (dentro do .exe, quando empacotado)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent
+
+
+def _pasta_de_trabalho():
+    """Onde os cartões são salvos (ao lado do .exe, quando empacotado)."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+ARQUIVO_MODELO = _pasta_do_programa() / "modelo" / "MODELO - CARTÃO PONTO.xlsx"
+PASTA_SAIDA = _pasta_de_trabalho() / "cartoes"
 
 # Onde a tabela de dias começa na planilha modelo
 LINHA_INICIAL = 6

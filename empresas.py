@@ -36,10 +36,10 @@ EMPRESAS = {
         },
         # Variação aleatória de ±5 min na marcação
         "variacoes": {
-            "entrada": False,
+            "entrada": True,
             "saida_almoco": False,
             "volta_almoco": False,
-            "saida": False,
+            "saida": True,
         },
     },
     "VAGNER": {
