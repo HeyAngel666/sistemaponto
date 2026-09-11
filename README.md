@@ -23,8 +23,9 @@ desligamento saem marcados como DESLIGADO.
 1. Aba **Pelo holerite (PDF)** → **Abrir holerite (PDF)**.
 2. O sistema lista todos os funcionários do mês, com as faltas e a data de
    admissão de cada um, e identifica a empresa pelo CNPJ.
-3. Horas extras não vêm no holerite — dê **dois cliques** na coluna
-   "Horas extras" do funcionário para preencher.
+3. As horas extras são separadas por percentual: **50%** (dias úteis) e
+   **100%** (domingos e feriados). Para corrigir qualquer valor, dê
+   **dois cliques** na célula.
 4. **Gerar todos os cartões**.
 
 Se preferir conferir antes, use **Salvar planilha para conferir**: sai a
@@ -76,8 +77,10 @@ mudar o horário da Montsul, por exemplo, basta editar:
 
 - **Domingos** (e sábados, na Montsul) marcados como dia não trabalhado
 - **Feriados nacionais** identificados pelo nome
-- **Horas extras** distribuídas entre os dias trabalhados, entre 30 min e
-  2 h por dia, lançadas logo após o horário de saída
+- **Horas extras de 50%** distribuídas entre os dias úteis trabalhados,
+  entre 30 min e 2 h por dia, lançadas logo após o horário de saída
+- **Horas extras de 100%** lançadas em domingos e feriados, como dia
+  trabalhado: entrada no horário normal da empresa, até 8 h por dia
 - **Faltas** e **atestados** sorteados entre os dias úteis do período
 
 ---

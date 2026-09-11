@@ -61,8 +61,14 @@ COL_ENTRADA_EXTRA = 6
 COL_SAIDA_EXTRA = 7
 
 # Limites de horas extras por dia (em minutos)
+# 50%: lançadas após a jornada, nos dias úteis
 EXTRA_MIN_POR_DIA = 30
 EXTRA_MAX_POR_DIA = 120
+# 100%: domingos e feriados trabalhados, até uma jornada inteira
+EXTRA_100_MIN_POR_DIA = 30
+EXTRA_100_MAX_POR_DIA = 480
+# Abaixo disso não compensa parar para o almoço e voltar
+MINIMO_PARA_VIRAR_TARDE = 60
 
 FERIADOS_BR = holidays.Brazil()
 
@@ -134,11 +140,11 @@ def calcular_horario(hora_str, variar):
 # =====================================
 # DISTRIBUIÇÃO DAS HORAS EXTRAS
 # =====================================
-def distribuir_exato(total_minutos, dias_validos):
+def distribuir_exato(total_minutos, dias_validos,
+                     minimo=EXTRA_MIN_POR_DIA, maximo=EXTRA_MAX_POR_DIA):
     """Distribui o total de minutos extras entre os dias disponíveis.
 
-    Cada dia que recebe extra fica entre EXTRA_MIN_POR_DIA e
-    EXTRA_MAX_POR_DIA minutos.
+    Cada dia que recebe extra fica entre `minimo` e `maximo` minutos.
     """
     dias_validos = list(dias_validos)
 
@@ -149,26 +155,26 @@ def distribuir_exato(total_minutos, dias_validos):
     if max_dias_possiveis == 0:
         raise ValueError("Não há dias disponíveis para lançar horas extras.")
 
-    if total_minutos > max_dias_possiveis * EXTRA_MAX_POR_DIA:
+    if total_minutos > max_dias_possiveis * maximo:
         raise ValueError(
             "Horas extras excedem o máximo possível "
-            f"({EXTRA_MAX_POR_DIA} min/dia x {max_dias_possiveis} dias)."
+            f"({maximo} min/dia x {max_dias_possiveis} dias)."
         )
 
-    min_dias_necessarios = -(-total_minutos // EXTRA_MAX_POR_DIA)
-    max_dias_necessarios = min(total_minutos // EXTRA_MIN_POR_DIA, max_dias_possiveis)
+    min_dias_necessarios = -(-total_minutos // maximo)
+    max_dias_necessarios = min(total_minutos // minimo, max_dias_possiveis)
 
     if max_dias_necessarios < min_dias_necessarios:
         raise ValueError(
             "Não é possível distribuir as horas extras respeitando o mínimo de "
-            f"{EXTRA_MIN_POR_DIA} min e o máximo de {EXTRA_MAX_POR_DIA} min por dia."
+            f"{minimo} min e o máximo de {maximo} min por dia."
         )
 
     qtd_dias = random.randint(int(min_dias_necessarios), int(max_dias_necessarios))
     dias_escolhidos = random.sample(dias_validos, qtd_dias)
 
-    extras = {d: EXTRA_MIN_POR_DIA for d in dias_escolhidos}
-    restante = total_minutos - EXTRA_MIN_POR_DIA * qtd_dias
+    extras = {d: minimo for d in dias_escolhidos}
+    restante = total_minutos - minimo * qtd_dias
 
     dias = dias_escolhidos[:]
     while restante > 0:
@@ -179,7 +185,7 @@ def distribuir_exato(total_minutos, dias_validos):
             if restante <= 0:
                 break
 
-            livre = EXTRA_MAX_POR_DIA - extras[d]
+            livre = maximo - extras[d]
             if livre <= 0:
                 continue
 
@@ -201,14 +207,21 @@ def distribuir_exato(total_minutos, dias_validos):
 # GERAÇÃO DO CARTÃO
 # =====================================
 def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
-                 atestados=0, dia_inicio=1, dia_fim=None, pasta_saida=None):
+                 atestados=0, dia_inicio=1, dia_fim=None, pasta_saida=None,
+                 horas_extras_100=0):
     """Gera o cartão ponto de um funcionário e devolve o caminho do arquivo.
+
+    horas_extras      -> extras de 50%, lançadas após a jornada dos dias úteis
+    horas_extras_100  -> extras de 100%, lançadas em domingos e feriados
 
     dia_inicio / dia_fim delimitam o período ativo no mês (admissão e
     desligamento). Dias após dia_fim são marcados como DESLIGADO.
     """
     empresa = obter_empresa(empresa_codigo)
     validar_entrada(nome, mes, ano, horas_extras, faltas, atestados)
+
+    if horas_extras_100 < 0:
+        raise ValueError("Horas extras de 100% não podem ser negativas.")
 
     ultimo_dia_mes = calendar.monthrange(ano, mes)[1]
     dia_fim = ultimo_dia_mes if dia_fim in (None, "") else int(dia_fim)
@@ -252,6 +265,17 @@ def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
     ]
     extras = distribuir_exato(int(round(horas_extras * 60)), dias_extras)
 
+    # Extras de 100%: domingos e feriados dentro do período
+    dias_100_possiveis = [
+        d for d in range(dia_inicio, dia_fim + 1)
+        if datetime(ano, mes, d).weekday() == DOMINGO
+        or datetime(ano, mes, d).date() in FERIADOS_BR
+    ]
+    extras_100 = distribuir_exato(
+        int(round(horas_extras_100 * 60)), dias_100_possiveis,
+        minimo=EXTRA_100_MIN_POR_DIA, maximo=EXTRA_100_MAX_POR_DIA,
+    )
+
     # ---- Preenchimento da planilha ----
     wb = load_workbook(ARQUIVO_MODELO)
     ws = wb.active
@@ -268,6 +292,8 @@ def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
 
         if d > dia_fim:
             preencher_descricao(ws, linha, data, "DESLIGADO")
+        elif extras_100.get(d, 0) > 0:
+            preencher_dia_de_cem_por_cento(ws, linha, data, empresa, extras_100[d])
         elif dia_semana == DOMINGO or dia_semana not in dias_trabalhados:
             preencher_descricao(ws, linha, data, NOME_DIA_SEMANA[dia_semana])
         elif data.date() in FERIADOS_BR:
@@ -315,6 +341,40 @@ def preencher_dia_trabalhado(ws, linha, data, empresa, extra_min):
     else:
         set_valor(ws, linha, COL_ENTRADA_EXTRA, "")
         set_valor(ws, linha, COL_SAIDA_EXTRA, "")
+
+
+def preencher_dia_de_cem_por_cento(ws, linha, data, empresa, minutos):
+    """Domingo ou feriado trabalhado: marcação normal, hora extra de 100%.
+
+    Começa no horário de entrada da empresa e segue pelas horas lançadas,
+    passando para o período da tarde quando ultrapassa o horário de almoço.
+    """
+    horario = horario_do_dia(empresa, data.weekday())
+    variacoes = empresa["variacoes"]
+
+    entrada = calcular_horario(horario["entrada"], variacoes.get("entrada", False))
+    saida_almoco = datetime.strptime(horario["saida_almoco"], "%H:%M")
+    volta_almoco = datetime.strptime(horario["volta_almoco"], "%H:%M")
+
+    minutos_da_manha = int((saida_almoco - entrada).total_seconds() // 60)
+
+    set_valor(ws, linha, COL_DATA, data.strftime("%d/%m"))
+    set_valor(ws, linha, COL_ENTRADA_MANHA, entrada.strftime("%H:%M"))
+
+    # Sobra pequena não vale parar para o almoço: emenda tudo no período da manhã
+    if minutos <= minutos_da_manha + MINIMO_PARA_VIRAR_TARDE:
+        fim = entrada + timedelta(minutes=minutos)
+        set_valor(ws, linha, COL_SAIDA_MANHA, fim.strftime("%H:%M"))
+        set_valor(ws, linha, COL_ENTRADA_TARDE, "")
+        set_valor(ws, linha, COL_SAIDA_TARDE, "")
+    else:
+        fim = volta_almoco + timedelta(minutes=minutos - minutos_da_manha)
+        set_valor(ws, linha, COL_SAIDA_MANHA, saida_almoco.strftime("%H:%M"))
+        set_valor(ws, linha, COL_ENTRADA_TARDE, volta_almoco.strftime("%H:%M"))
+        set_valor(ws, linha, COL_SAIDA_TARDE, fim.strftime("%H:%M"))
+
+    set_valor(ws, linha, COL_ENTRADA_EXTRA, "")
+    set_valor(ws, linha, COL_SAIDA_EXTRA, "")
 
 
 def validar_entrada(nome, mes, ano, horas_extras, faltas, atestados):

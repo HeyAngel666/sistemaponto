@@ -158,13 +158,22 @@ def _horas_seguintes(linhas, indice):
     return 0.0
 
 
-def _e_rubrica_de_extras(linha):
-    """A rubrica de hora extra (ex: 'HORA EXTRA 050%').
+def _percentual_da_extra(linha):
+    """Percentual da rubrica de hora extra: 50, 100 ou None se não for extra.
 
+    Ex: 'HORA EXTRA 050%' -> 50 | 'HORA EXTRA 100%' -> 100
     O DSR sobre horas extras não entra: é reflexo, não hora trabalhada.
     """
     texto = linha.upper()
-    return "HORA" in texto and "EXTRA" in texto and "DSR" not in texto
+    if "HORA" not in texto or "EXTRA" not in texto or "DSR" in texto:
+        return None
+
+    achado = re.search(r"(\d{2,3})\s*%", texto)
+    if achado:
+        return 100 if int(achado.group(1)) >= 100 else 50
+
+    # Sem percentual no nome, assume o adicional comum de dia útil
+    return 50
 
 
 def ler_holerite(caminho_pdf):
@@ -188,6 +197,7 @@ def ler_holerite(caminho_pdf):
             "admissao": "",
             "faltas": 0,
             "horas_extras": 0.0,
+            "horas_extras_100": 0.0,
             "dias_ferias": 0,
             "avisos": [],
         }
@@ -208,8 +218,10 @@ def ler_holerite(caminho_pdf):
             if re.search(r"\bFALTAS$", linha):
                 registro["faltas"] = _numero_seguinte(linhas, indice)
 
-            # pode haver mais de uma faixa de hora extra (50%, 100%): somam
-            if _e_rubrica_de_extras(linha):
+            percentual = _percentual_da_extra(linha)
+            if percentual == 100:
+                registro["horas_extras_100"] += _horas_seguintes(linhas, indice)
+            elif percentual == 50:
                 registro["horas_extras"] += _horas_seguintes(linhas, indice)
 
             if "FERIAS" in linha and "DEDUCAO" not in linha:
@@ -227,6 +239,7 @@ def ler_holerite(caminho_pdf):
             continue
 
         registro["horas_extras"] = round(registro["horas_extras"], 2)
+        registro["horas_extras_100"] = round(registro["horas_extras_100"], 2)
 
         if registro["dias_ferias"]:
             registro["avisos"].append(

@@ -20,7 +20,8 @@ COLUNAS = [
     ("NOME", "Nome do funcionário"),
     ("MES", "1 a 12"),
     ("ANO", "Ex: 2026"),
-    ("HORAS EXTRAS", "Total no mês (ex: 12 ou 12.5). Deixe 0 se não houver"),
+    ("HORAS EXTRAS", "Extras de 50% (dias úteis). Deixe 0 se não houver"),
+    ("HORAS EXTRAS 100", "Extras de 100% (domingos/feriados). Deixe 0 se não houver"),
     ("FALTAS", "Quantidade de faltas no mês"),
     ("ATESTADOS", "Quantidade de atestados no mês"),
     ("DIA INICIAL", "Deixe vazio se trabalhou o mês todo"),
@@ -91,6 +92,7 @@ def criar_planilha_modelo(caminho, registros=None):
                 registro.get("mes"),
                 registro.get("ano"),
                 registro.get("horas_extras", 0),
+                registro.get("horas_extras_100", 0),
                 registro.get("faltas", 0),
                 registro.get("atestados", 0),
                 registro.get("dia_inicio") if registro.get("dia_inicio", 1) != 1 else None,
@@ -103,7 +105,7 @@ def criar_planilha_modelo(caminho, registros=None):
                 cel.border = borda
             primeira_linha_livre += 1
     else:
-        exemplo = ["MONTSUL", "JOÃO DA SILVA", 8, 2026, 12, 1, 0, None, None]
+        exemplo = ["MONTSUL", "JOÃO DA SILVA", 8, 2026, 12, 0, 1, 0, None, None]
         for idx, valor in enumerate(exemplo, start=1):
             cel = ws.cell(row=primeira_linha_livre, column=idx, value=valor)
             cel.font = Font(name=fonte, size=10)
@@ -167,6 +169,7 @@ def ler_planilha(caminho):
                 "mes": mes,
                 "ano": ano,
                 "horas_extras": decimal(row.get("HORAS EXTRAS"), padrao=0),
+                "horas_extras_100": decimal(row.get("HORAS EXTRAS 100"), padrao=0),
                 "faltas": inteiro(row.get("FALTAS"), padrao=0),
                 "atestados": inteiro(row.get("ATESTADOS"), padrao=0),
                 "dia_inicio": inteiro(row.get("DIA INICIAL"), padrao=1),

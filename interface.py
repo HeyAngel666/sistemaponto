@@ -191,26 +191,40 @@ class AplicacaoCartaoPonto:
         grupo_ocor = ttk.Labelframe(pai, text=" Ocorrências do mês ", padding=14)
         grupo_ocor.pack(fill="x", pady=(14, 0))
 
-        ttk.Label(grupo_ocor, text="Horas extras").grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Label(grupo_ocor, text="Horas extras 50%").grid(row=0, column=0, sticky="w", pady=5)
         self.entry_horas = ttk.Entry(grupo_ocor, width=10, font=(FONTE, 10))
         self.entry_horas.insert(0, "0")
-        self.entry_horas.grid(row=0, column=1, sticky="w", pady=5, padx=(10, 24))
+        self.entry_horas.grid(row=0, column=1, sticky="w", pady=5, padx=(10, 8))
+        ttk.Label(grupo_ocor, text="dias úteis", style="Apoio.TLabel").grid(
+            row=0, column=2, sticky="w", pady=5, padx=(0, 30)
+        )
 
-        ttk.Label(grupo_ocor, text="Faltas").grid(row=0, column=2, sticky="w", pady=5)
+        ttk.Label(grupo_ocor, text="Faltas").grid(row=0, column=3, sticky="w", pady=5)
         self.entry_faltas = ttk.Entry(grupo_ocor, width=10, font=(FONTE, 10))
         self.entry_faltas.insert(0, "0")
-        self.entry_faltas.grid(row=0, column=3, sticky="w", pady=5, padx=(10, 24))
+        self.entry_faltas.grid(row=0, column=4, sticky="w", pady=5, padx=(10, 0))
 
-        ttk.Label(grupo_ocor, text="Atestados").grid(row=0, column=4, sticky="w", pady=5)
+        ttk.Label(grupo_ocor, text="Horas extras 100%").grid(row=1, column=0, sticky="w", pady=5)
+        self.entry_horas_100 = ttk.Entry(grupo_ocor, width=10, font=(FONTE, 10))
+        self.entry_horas_100.insert(0, "0")
+        self.entry_horas_100.grid(row=1, column=1, sticky="w", pady=5, padx=(10, 8))
+        ttk.Label(grupo_ocor, text="domingos e feriados", style="Apoio.TLabel").grid(
+            row=1, column=2, sticky="w", pady=5, padx=(0, 30)
+        )
+
+        ttk.Label(grupo_ocor, text="Atestados").grid(row=1, column=3, sticky="w", pady=5)
         self.entry_atestados = ttk.Entry(grupo_ocor, width=10, font=(FONTE, 10))
         self.entry_atestados.insert(0, "0")
-        self.entry_atestados.grid(row=0, column=5, sticky="w", pady=5, padx=(10, 0))
+        self.entry_atestados.grid(row=1, column=4, sticky="w", pady=5, padx=(10, 0))
 
         ttk.Label(
             grupo_ocor,
-            text="Horas extras: total do mês (ex: 12 ou 12,5). O sistema distribui entre os dias.",
+            text="Informe o total do mês (ex: 12 ou 12,5). O sistema distribui "
+                 "entre os dias: as de 100% aparecem como domingo trabalhado.",
             style="Apoio.TLabel",
-        ).grid(row=1, column=0, columnspan=6, sticky="w", pady=(4, 0))
+            wraplength=640,
+            justify="left",
+        ).grid(row=2, column=0, columnspan=5, sticky="w", pady=(6, 0))
 
         # ----- Ação -----
         acoes = ttk.Frame(pai)
@@ -263,16 +277,17 @@ class AplicacaoCartaoPonto:
         quadro = ttk.Labelframe(pai, text=" Funcionários encontrados ", padding=10)
         quadro.pack(fill="both", expand=True, pady=(16, 0))
 
-        colunas = ("nome", "faltas", "extras", "inicio", "aviso")
+        colunas = ("nome", "faltas", "extras", "extras100", "inicio", "aviso")
         self.lista_holerite = ttk.Treeview(
             quadro, columns=colunas, show="headings", height=12
         )
         for coluna, titulo, largura in (
-            ("nome", "Funcionário", 235),
-            ("faltas", "Faltas", 55),
-            ("extras", "Horas extras", 95),
-            ("inicio", "Dia inicial", 80),
-            ("aviso", "Observação", 200),
+            ("nome", "Funcionário", 205),
+            ("faltas", "Faltas", 50),
+            ("extras", "Extras 50%", 80),
+            ("extras100", "Extras 100%", 85),
+            ("inicio", "Dia inicial", 70),
+            ("aviso", "Observação", 175),
         ):
             self.lista_holerite.heading(coluna, text=titulo)
             self.lista_holerite.column(coluna, width=largura)
@@ -384,7 +399,8 @@ class AplicacaoCartaoPonto:
                 nome=self.entry_nome.get().strip(),
                 mes=mes,
                 ano=ano,
-                horas_extras=self._numero(self.entry_horas.get(), "Horas extras"),
+                horas_extras=self._numero(self.entry_horas.get(), "Extras 50%"),
+                horas_extras_100=self._numero(self.entry_horas_100.get(), "Extras 100%"),
                 faltas=int(self._numero(self.entry_faltas.get(), "Faltas")),
                 atestados=int(self._numero(self.entry_atestados.get(), "Atestados")),
                 dia_inicio=int(self._numero(self.entry_inicio.get(), "Dia inicial", padrao=1)),
@@ -442,6 +458,7 @@ class AplicacaoCartaoPonto:
                     registro["nome"],
                     registro["faltas"],
                     registro["horas_extras"],
+                    registro["horas_extras_100"],
                     registro["dia_inicio"],
                     "; ".join(registro["avisos"]),
                 ),
@@ -451,13 +468,14 @@ class AplicacaoCartaoPonto:
         """Duplo clique em Faltas, Horas extras ou Dia inicial edita o valor."""
         item = self.lista_holerite.identify_row(evento.y)
         coluna = self.lista_holerite.identify_column(evento.x)
-        if not item or coluna not in ("#2", "#3", "#4"):
+        if not item or coluna not in ("#2", "#3", "#4", "#5"):
             return
 
         campo, rotulo = {
             "#2": ("faltas", "Faltas"),
-            "#3": ("horas_extras", "Horas extras"),
-            "#4": ("dia_inicio", "Dia inicial"),
+            "#3": ("horas_extras", "Horas extras de 50%"),
+            "#4": ("horas_extras_100", "Horas extras de 100%"),
+            "#5": ("dia_inicio", "Dia inicial"),
         }[coluna]
 
         registro = self.registros_holerite[int(item)]
@@ -476,7 +494,7 @@ class AplicacaoCartaoPonto:
             messagebox.showerror("Valor inválido", f"'{resposta}' não é um número.")
             return
 
-        registro[campo] = valor if campo == "horas_extras" else int(valor)
+        registro[campo] = valor if campo.startswith("horas_extras") else int(valor)
         self._recarregar_lista_holerite()
 
     def salvar_planilha_do_holerite(self):
@@ -523,6 +541,7 @@ class AplicacaoCartaoPonto:
                 "mes": r["mes"],
                 "ano": r["ano"],
                 "horas_extras": r["horas_extras"],
+                "horas_extras_100": r["horas_extras_100"],
                 "faltas": r["faltas"],
                 "atestados": r.get("atestados", 0),
                 "dia_inicio": r["dia_inicio"],
