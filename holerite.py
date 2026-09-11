@@ -164,8 +164,9 @@ def _percentual_da_extra(linha):
     Ex: 'HORA EXTRA 050%' -> 50 | 'HORA EXTRA 100%' -> 100
     O DSR sobre horas extras não entra: é reflexo, não hora trabalhada.
     """
+    # Cobre HORA EXTRA, HORAS EXTRAS, H.EXTRA, ADICIONAL HORA EXTRA...
     texto = linha.upper()
-    if "HORA" not in texto or "EXTRA" not in texto or "DSR" in texto:
+    if "EXTRA" not in texto or "DSR" in texto:
         return None
 
     achado = re.search(r"(\d{2,3})\s*%", texto)
@@ -174,6 +175,27 @@ def _percentual_da_extra(linha):
 
     # Sem percentual no nome, assume o adicional comum de dia útil
     return 50
+
+
+# Rubricas em horas que não são hora extra e por isso não entram no cartão
+RUBRICAS_DE_HORAS_CONHECIDAS = ("HORAS TRABALHADAS", "HORAS NORMAIS", "DSR")
+
+
+def _rubrica_de_horas_nao_lida(linha, linhas, indice):
+    """Rubrica lançada em horas que o sistema não soube classificar.
+
+    Serve de rede de segurança: se a folha usar um nome diferente para a
+    hora extra, isso aparece como aviso em vez de sumir do cartão.
+    """
+    texto = linha.upper()
+    if any(conhecida in texto for conhecida in RUBRICAS_DE_HORAS_CONHECIDAS):
+        return False
+    if not re.match(r"^\d{5}\s", linha):
+        return False
+    return bool(
+        indice + 1 < len(linhas)
+        and re.fullmatch(r"\d{1,3}:\d{2}", linhas[indice + 1])
+    )
 
 
 def ler_holerite(caminho_pdf):
@@ -202,6 +224,8 @@ def ler_holerite(caminho_pdf):
             "avisos": [],
         }
 
+        rubricas_estranhas = set()
+
         for indice, linha in enumerate(linhas):
             cabecalho = re.match(r"^(\d{5})\s+([A-ZÇÁÉÍÓÚÃÕÂÊÔ][A-ZÇÁÉÍÓÚÃÕÂÊÔ\s]+)$", linha)
             if cabecalho and not registro["nome"]:
@@ -223,6 +247,8 @@ def ler_holerite(caminho_pdf):
                 registro["horas_extras_100"] += _horas_seguintes(linhas, indice)
             elif percentual == 50:
                 registro["horas_extras"] += _horas_seguintes(linhas, indice)
+            elif _rubrica_de_horas_nao_lida(linha, linhas, indice):
+                rubricas_estranhas.add(linha)
 
             if "FERIAS" in linha and "DEDUCAO" not in linha:
                 dias = re.search(r"SALARIO NORMAL", " ".join(linhas))
@@ -240,6 +266,9 @@ def ler_holerite(caminho_pdf):
 
         registro["horas_extras"] = round(registro["horas_extras"], 2)
         registro["horas_extras_100"] = round(registro["horas_extras_100"], 2)
+
+        for rubrica in sorted(rubricas_estranhas):
+            registro["avisos"].append(f"rubrica em horas não reconhecida: {rubrica}")
 
         if registro["dias_ferias"]:
             registro["avisos"].append(
