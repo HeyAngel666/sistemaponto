@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+
+# Cartões gerados (saída do sistema)
+cartoes/
+
+# Build do executável
+build/
+dist/
+*.spec
