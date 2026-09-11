@@ -94,6 +94,27 @@ programa. Nas próximas, abre direto.
 Para deixar à mão: clique com o botão direito nesse arquivo →
 **Enviar para** → **Área de trabalho (criar atalho)**.
 
+## Manter o sistema atualizado
+
+Se a pasta foi criada com o Git (comando `git clone`), basta dar dois
+cliques em **`Atualizar Sistema.bat`** para baixar a versão mais recente.
+
+Para começar a usar isso:
+
+1. Instale o Git: https://git-scm.com/download/win (pode aceitar tudo o
+   que ele sugerir durante a instalação)
+2. Abra a pasta onde quer o sistema (ex: Área de Trabalho), clique na
+   barra de endereço, digite `cmd` e dê Enter
+3. Na janela preta, cole e dê Enter:
+
+```
+git clone https://github.com/HeyAngel666/sistemaponto.git
+```
+
+Isso cria a pasta `sistemaponto` já ligada às atualizações. A pasta
+antiga pode ser apagada depois (os cartões gerados ficam onde você
+escolheu salvar, não dentro dela).
+
 ## Gerar o programa como .exe (opcional)
 
 Dê dois cliques em **`gerar_exe.bat`**. Ao terminar, o programa fica em
