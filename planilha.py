@@ -26,6 +26,8 @@ COLUNAS = [
     ("ATESTADOS", "Quantidade de atestados no mês"),
     ("DIA INICIAL", "Deixe vazio se trabalhou o mês todo"),
     ("DIA FINAL", "Preencha só se foi desligado no meio do mês"),
+    ("FERIAS DIAS", "Dias corridos de férias no mês. Deixe 0 se não houver"),
+    ("FERIAS INICIO", "Dia em que as férias começam"),
 ]
 
 
@@ -97,6 +99,8 @@ def criar_planilha_modelo(caminho, registros=None):
                 registro.get("atestados", 0),
                 registro.get("dia_inicio") if registro.get("dia_inicio", 1) != 1 else None,
                 registro.get("dia_fim"),
+                registro.get("dias_ferias", 0),
+                registro.get("inicio_ferias"),
             ]
             for idx, valor in enumerate(valores, start=1):
                 cel = ws.cell(row=primeira_linha_livre, column=idx, value=valor)
@@ -105,7 +109,7 @@ def criar_planilha_modelo(caminho, registros=None):
                 cel.border = borda
             primeira_linha_livre += 1
     else:
-        exemplo = ["MONTSUL", "JOÃO DA SILVA", 8, 2026, 12, 0, 1, 0, None, None]
+        exemplo = ["MONTSUL", "JOÃO DA SILVA", 8, 2026, 12, 0, 1, 0, None, None, 0, None]
         for idx, valor in enumerate(exemplo, start=1):
             cel = ws.cell(row=primeira_linha_livre, column=idx, value=valor)
             cel.font = Font(name=fonte, size=10)
@@ -174,6 +178,8 @@ def ler_planilha(caminho):
                 "atestados": inteiro(row.get("ATESTADOS"), padrao=0),
                 "dia_inicio": inteiro(row.get("DIA INICIAL"), padrao=1),
                 "dia_fim": inteiro(row.get("DIA FINAL"), padrao=ultimo_dia),
+                "dias_ferias": inteiro(row.get("FERIAS DIAS"), padrao=0),
+                "inicio_ferias": inteiro(row.get("FERIAS INICIO"), padrao=None),
             })
         except (ValueError, TypeError) as erro:
             raise ValueError(f"Linha {numero_linha} da planilha: {erro}") from erro

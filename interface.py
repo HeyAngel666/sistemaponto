@@ -7,12 +7,13 @@ import sys
 import threading
 from datetime import date
 from pathlib import Path
-from tkinter import StringVar, Tk, filedialog, messagebox, simpledialog, ttk
+from tkinter import BooleanVar, StringVar, Tk, filedialog, messagebox, simpledialog, ttk
 
+import cartao_pdf
 import empresas as cadastro
 import holerite
 import planilha
-from gerador import MESES_PT, PASTA_SAIDA, gerar_cartao
+from gerador import MESES_PT, PASTA_SAIDA, gerar_cartao, montar_cartao, salvar_em_excel
 
 COR_FUNDO = "#F4F6F8"
 COR_CABECALHO = "#37474F"
@@ -29,12 +30,13 @@ class AplicacaoCartaoPonto:
     def __init__(self, janela):
         self.janela = janela
         self.janela.title("Sistema de Cartão Ponto")
-        self.janela.geometry("780x800")
-        self.janela.minsize(760, 720)
+        self.janela.geometry("860x800")
+        self.janela.minsize(840, 720)
         self.janela.configure(bg=COR_FUNDO)
 
         self.fila = queue.Queue()
         self.ultima_pasta = PASTA_SAIDA
+        self.var_pdf = BooleanVar(value=True)
 
         self._configurar_estilo()
         self._montar_cabecalho()
@@ -217,6 +219,18 @@ class AplicacaoCartaoPonto:
         self.entry_atestados.insert(0, "0")
         self.entry_atestados.grid(row=1, column=4, sticky="w", pady=5, padx=(10, 0))
 
+        ttk.Label(grupo_ocor, text="Férias (dias)").grid(row=2, column=0, sticky="w", pady=5)
+        self.entry_ferias = ttk.Entry(grupo_ocor, width=10, font=(FONTE, 10))
+        self.entry_ferias.insert(0, "0")
+        self.entry_ferias.grid(row=2, column=1, sticky="w", pady=5, padx=(10, 8))
+        ttk.Label(grupo_ocor, text="dias corridos", style="Apoio.TLabel").grid(
+            row=2, column=2, sticky="w", pady=5, padx=(0, 30)
+        )
+
+        ttk.Label(grupo_ocor, text="Começam dia").grid(row=2, column=3, sticky="w", pady=5)
+        self.entry_inicio_ferias = ttk.Entry(grupo_ocor, width=10, font=(FONTE, 10))
+        self.entry_inicio_ferias.grid(row=2, column=4, sticky="w", pady=5, padx=(10, 0))
+
         ttk.Label(
             grupo_ocor,
             text="Informe o total do mês (ex: 12 ou 12,5). O sistema distribui "
@@ -224,7 +238,7 @@ class AplicacaoCartaoPonto:
             style="Apoio.TLabel",
             wraplength=640,
             justify="left",
-        ).grid(row=2, column=0, columnspan=5, sticky="w", pady=(6, 0))
+        ).grid(row=3, column=0, columnspan=5, sticky="w", pady=(6, 0))
 
         # ----- Ação -----
         acoes = ttk.Frame(pai)
@@ -249,9 +263,9 @@ class AplicacaoCartaoPonto:
             justify="left",
             wraplength=660,
             text="Abra o PDF dos holerites do mês. O sistema lê os funcionários, "
-                 "as faltas e a data de admissão de cada um, e gera os cartões.\n"
-                 "Horas extras não vêm no holerite — preencha na coluna abaixo "
-                 "clicando duas vezes, ou depois na planilha.",
+                 "as faltas, as horas extras e a data de admissão de cada um.\n"
+                 "Para corrigir qualquer valor, dê dois cliques na célula. Quem "
+                 "tiver férias precisa do dia em que elas começam.",
         ).pack(anchor="w")
 
         acoes = ttk.Frame(pai)
@@ -274,23 +288,30 @@ class AplicacaoCartaoPonto:
         )
         self.btn_salvar_planilha.pack(side="left", padx=(10, 0))
 
+        ttk.Checkbutton(
+            pai,
+            text="Gerar também um PDF único com todos os cartões, pronto para imprimir",
+            variable=self.var_pdf,
+        ).pack(anchor="w", pady=(12, 0))
+
         quadro = ttk.Labelframe(pai, text=" Funcionários encontrados ", padding=10)
         quadro.pack(fill="both", expand=True, pady=(16, 0))
 
-        colunas = ("nome", "faltas", "extras", "extras100", "inicio", "aviso")
+        colunas = ("nome", "faltas", "extras", "extras100", "inicio", "ferias", "aviso")
         self.lista_holerite = ttk.Treeview(
             quadro, columns=colunas, show="headings", height=12
         )
-        for coluna, titulo, largura in (
-            ("nome", "Funcionário", 205),
-            ("faltas", "Faltas", 50),
-            ("extras", "Extras 50%", 80),
-            ("extras100", "Extras 100%", 85),
-            ("inicio", "Dia inicial", 70),
-            ("aviso", "Observação", 175),
+        for coluna, titulo, largura, alinhamento in (
+            ("nome", "Funcionário", 205, "w"),
+            ("faltas", "Faltas", 58, "center"),
+            ("extras", "Extra 50%", 80, "center"),
+            ("extras100", "Extra 100%", 86, "center"),
+            ("inicio", "Admissão", 76, "center"),
+            ("ferias", "Férias", 125, "center"),
+            ("aviso", "Observação", 140, "w"),
         ):
             self.lista_holerite.heading(coluna, text=titulo)
-            self.lista_holerite.column(coluna, width=largura)
+            self.lista_holerite.column(coluna, width=largura, anchor=alinhamento)
 
         self.lista_holerite.pack(fill="both", expand=True, side="left")
         self.lista_holerite.bind("<Double-1>", self._editar_celula_holerite)
@@ -328,6 +349,12 @@ class AplicacaoCartaoPonto:
             command=self.importar_planilha,
         )
         self.btn_importar.pack(side="left", padx=(10, 0))
+
+        ttk.Checkbutton(
+            pai,
+            text="Gerar também um PDF único com todos os cartões, pronto para imprimir",
+            variable=self.var_pdf,
+        ).pack(anchor="w", pady=(12, 0))
 
         resultado = ttk.Labelframe(pai, text=" Resultado ", padding=10)
         resultado.pack(fill="both", expand=True, pady=(16, 0))
@@ -405,6 +432,8 @@ class AplicacaoCartaoPonto:
                 atestados=int(self._numero(self.entry_atestados.get(), "Atestados")),
                 dia_inicio=int(self._numero(self.entry_inicio.get(), "Dia inicial", padrao=1)),
                 dia_fim=int(self._numero(self.entry_fim.get(), "Dia final", padrao=ultimo_dia)),
+                dias_ferias=int(self._numero(self.entry_ferias.get(), "Férias")),
+                inicio_ferias=self.entry_inicio_ferias.get().strip() or None,
             )
 
             self._status(f"Cartão gerado: {caminho}")
@@ -436,6 +465,7 @@ class AplicacaoCartaoPonto:
         for registro in registros:
             registro["dia_inicio"] = holerite.dia_inicial_por_admissao(registro)
             registro["atestados"] = 0
+            registro["inicio_ferias"] = None
 
         self.registros_holerite = registros
         self._recarregar_lista_holerite()
@@ -460,15 +490,24 @@ class AplicacaoCartaoPonto:
                     registro["horas_extras"],
                     registro["horas_extras_100"],
                     registro["dia_inicio"],
+                    self._texto_das_ferias(registro),
                     "; ".join(registro["avisos"]),
                 ),
             )
+
+    @staticmethod
+    def _texto_das_ferias(registro):
+        dias = registro.get("dias_ferias", 0)
+        if not dias:
+            return ""
+        inicio = registro.get("inicio_ferias")
+        return f"{dias}d a partir de {inicio}" if inicio else f"{dias}d — informar"
 
     def _editar_celula_holerite(self, evento):
         """Duplo clique em Faltas, Horas extras ou Dia inicial edita o valor."""
         item = self.lista_holerite.identify_row(evento.y)
         coluna = self.lista_holerite.identify_column(evento.x)
-        if not item or coluna not in ("#2", "#3", "#4", "#5"):
+        if not item or coluna not in ("#2", "#3", "#4", "#5", "#6"):
             return
 
         campo, rotulo = {
@@ -476,13 +515,22 @@ class AplicacaoCartaoPonto:
             "#3": ("horas_extras", "Horas extras de 50%"),
             "#4": ("horas_extras_100", "Horas extras de 100%"),
             "#5": ("dia_inicio", "Dia inicial"),
+            "#6": ("inicio_ferias", "Dia em que as férias começam"),
         }[coluna]
 
         registro = self.registros_holerite[int(item)]
+
+        if campo == "inicio_ferias" and not registro.get("dias_ferias"):
+            messagebox.showinfo(
+                "Sem férias",
+                f"{registro['nome']} não tem férias neste mês, segundo o holerite.",
+            )
+            return
+
         resposta = simpledialog.askstring(
             rotulo,
             f"{rotulo} de {registro['nome']}:",
-            initialvalue=str(registro[campo]),
+            initialvalue=str(registro.get(campo) or ""),
             parent=self.janela,
         )
         if resposta is None:
@@ -546,13 +594,15 @@ class AplicacaoCartaoPonto:
                 "atestados": r.get("atestados", 0),
                 "dia_inicio": r["dia_inicio"],
                 "dia_fim": calendar.monthrange(r["ano"], r["mes"])[1],
+                "dias_ferias": r.get("dias_ferias", 0),
+                "inicio_ferias": r.get("inicio_ferias"),
             }
             for r in self.registros_holerite
         ]
 
         self.btn_importar.configure(state="disabled")
         threading.Thread(
-            target=self._processar_lote, args=(trabalhos,), daemon=True
+            target=self._processar_lote, args=(trabalhos, self.var_pdf.get()), daemon=True
         ).start()
 
     def criar_planilha_modelo(self):
@@ -600,17 +650,25 @@ class AplicacaoCartaoPonto:
         self.lista_resultado.delete(*self.lista_resultado.get_children())
         self.btn_importar.configure(state="disabled")
         threading.Thread(
-            target=self._processar_lote, args=(registros,), daemon=True
+            target=self._processar_lote, args=(registros, self.var_pdf.get()), daemon=True
         ).start()
 
-    def _processar_lote(self, registros):
-        """Roda fora da tela; manda os resultados pela fila."""
+    def _processar_lote(self, registros, gerar_pdf_junto):
+        """Roda fora da tela; manda os resultados pela fila.
+
+        Nada aqui pode ler ou escrever na tela — nem variáveis do tkinter.
+        """
         gerados = falhas = 0
+        montados = []
 
         for registro in registros:
-            nome = registro["nome"]
+            dados = {c: v for c, v in registro.items() if c != "pasta_saida"}
+            nome = dados["nome"]
             try:
-                arquivo = gerar_cartao(**registro)
+                # monta uma vez só: o Excel e o PDF saem iguais
+                cartao = montar_cartao(**dados)
+                arquivo = salvar_em_excel(cartao, registro.get("pasta_saida"))
+                montados.append(cartao)
                 self.fila.put(("linha", nome, f"Gerado: {Path(arquivo).name}"))
                 gerados += 1
             except Exception as erro:
@@ -621,7 +679,20 @@ class AplicacaoCartaoPonto:
                 ("status", f"Processando... {gerados + falhas}/{len(registros)}")
             )
 
-        pasta = registros[0].get("pasta_saida") if registros else PASTA_SAIDA
+        pasta = Path(registros[0].get("pasta_saida") or PASTA_SAIDA)
+
+        if montados and gerar_pdf_junto:
+            try:
+                arquivo_pdf = pasta / (
+                    f"Cartões {montados[0]['mes']:02d}-{montados[0]['ano']}.pdf"
+                )
+                cartao_pdf.gerar_pdf(montados, arquivo_pdf)
+                self.fila.put(
+                    ("linha", "— PDF —", f"{len(montados)} cartões em {arquivo_pdf.name}")
+                )
+            except Exception as erro:
+                self.fila.put(("linha", "— PDF —", f"ERRO: {erro}"))
+
         self.fila.put(("fim", gerados, falhas, pasta))
 
     def _consumir_fila(self):

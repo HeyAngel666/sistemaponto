@@ -122,13 +122,6 @@ def set_valor(ws, row, col, value):
     cell.value = value
 
 
-def preencher_descricao(ws, linha, data, descricao):
-    """Preenche a linha inteira com uma ocorrência (DOMINGO, FALTA, etc)."""
-    set_valor(ws, linha, COL_DATA, data.strftime("%d/%m"))
-    for col in range(COL_ENTRADA_MANHA, COL_SAIDA_EXTRA + 1):
-        set_valor(ws, linha, col, descricao)
-
-
 def calcular_horario(hora_str, variar):
     """Converte 'HH:MM' em datetime, com variação opcional de ±5 minutos."""
     base = datetime.strptime(hora_str, "%H:%M")
@@ -141,10 +134,14 @@ def calcular_horario(hora_str, variar):
 # DISTRIBUIÇÃO DAS HORAS EXTRAS
 # =====================================
 def distribuir_exato(total_minutos, dias_validos,
-                     minimo=EXTRA_MIN_POR_DIA, maximo=EXTRA_MAX_POR_DIA):
+                     minimo=EXTRA_MIN_POR_DIA, maximo=EXTRA_MAX_POR_DIA,
+                     concentrar=False):
     """Distribui o total de minutos extras entre os dias disponíveis.
 
     Cada dia que recebe extra fica entre `minimo` e `maximo` minutos.
+
+    `concentrar` usa o menor número de dias possível — é o caso do domingo
+    trabalhado, que costuma ser um dia inteiro e não um pouco em cada.
     """
     dias_validos = list(dias_validos)
 
@@ -170,7 +167,10 @@ def distribuir_exato(total_minutos, dias_validos,
             f"{minimo} min e o máximo de {maximo} min por dia."
         )
 
-    qtd_dias = random.randint(int(min_dias_necessarios), int(max_dias_necessarios))
+    qtd_dias = (
+        int(min_dias_necessarios) if concentrar
+        else random.randint(int(min_dias_necessarios), int(max_dias_necessarios))
+    )
     dias_escolhidos = random.sample(dias_validos, qtd_dias)
 
     extras = {d: minimo for d in dias_escolhidos}
@@ -206,16 +206,19 @@ def distribuir_exato(total_minutos, dias_validos,
 # =====================================
 # GERAÇÃO DO CARTÃO
 # =====================================
-def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
-                 atestados=0, dia_inicio=1, dia_fim=None, pasta_saida=None,
-                 horas_extras_100=0):
-    """Gera o cartão ponto de um funcionário e devolve o caminho do arquivo.
+def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
+                  atestados=0, dia_inicio=1, dia_fim=None, horas_extras_100=0,
+                  dias_ferias=0, inicio_ferias=None):
+    """Monta o conteúdo do cartão (sem gravar arquivo).
+
+    É a fonte única do que vai para o Excel e para o PDF.
 
     horas_extras      -> extras de 50%, lançadas após a jornada dos dias úteis
     horas_extras_100  -> extras de 100%, lançadas em domingos e feriados
+    dias_ferias       -> dias corridos de férias, a partir de inicio_ferias
 
     dia_inicio / dia_fim delimitam o período ativo no mês (admissão e
-    desligamento). Dias após dia_fim são marcados como DESLIGADO.
+    desligamento).
     """
     empresa = obter_empresa(empresa_codigo)
     validar_entrada(nome, mes, ano, horas_extras, faltas, atestados)
@@ -234,16 +237,18 @@ def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
             f"Dia final deve estar entre {dia_inicio} e {ultimo_dia_mes}."
         )
 
-    if not ARQUIVO_MODELO.exists():
-        raise FileNotFoundError(f"Planilha modelo não encontrada: {ARQUIVO_MODELO}")
+    dias_de_ferias = _periodo_de_ferias(
+        dias_ferias, inicio_ferias, dia_inicio, dia_fim, ultimo_dia_mes
+    )
 
     dias_trabalhados = empresa["dias_trabalhados"]
 
-    # Dias em que o funcionário deveria trabalhar (sem feriados)
+    # Dias em que o funcionário deveria trabalhar (sem feriados e sem férias)
     dias_uteis = [
         d for d in range(dia_inicio, dia_fim + 1)
         if datetime(ano, mes, d).weekday() in dias_trabalhados
         and datetime(ano, mes, d).date() not in FERIADOS_BR
+        and d not in dias_de_ferias
     ]
 
     if faltas + atestados > len(dias_uteis):
@@ -265,49 +270,118 @@ def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
     ]
     extras = distribuir_exato(int(round(horas_extras * 60)), dias_extras)
 
-    # Extras de 100%: domingos e feriados dentro do período
+    # Extras de 100%: domingos e feriados dentro do período (fora das férias)
     dias_100_possiveis = [
         d for d in range(dia_inicio, dia_fim + 1)
-        if datetime(ano, mes, d).weekday() == DOMINGO
-        or datetime(ano, mes, d).date() in FERIADOS_BR
+        if (datetime(ano, mes, d).weekday() == DOMINGO
+            or datetime(ano, mes, d).date() in FERIADOS_BR)
+        and d not in dias_de_ferias
     ]
     extras_100 = distribuir_exato(
         int(round(horas_extras_100 * 60)), dias_100_possiveis,
         minimo=EXTRA_100_MIN_POR_DIA, maximo=EXTRA_100_MAX_POR_DIA,
+        concentrar=True,
     )
 
-    # ---- Preenchimento da planilha ----
-    wb = load_workbook(ARQUIVO_MODELO)
-    ws = wb.active
+    admissao = datetime(ano, mes, dia_inicio).strftime("%d/%m")
+    linhas = []
 
-    ws[CELULA_EMPRESA] = cabecalho_empresa(empresa)
-    ws[CELULA_NOME] = nome
-    ws[CELULA_MES_ANO] = f"{MESES_PT[mes]}/{ano}"
-
-    linha = LINHA_INICIAL + (dia_inicio - 1)
-
-    for d in range(dia_inicio, ultimo_dia_mes + 1):
+    for d in range(1, ultimo_dia_mes + 1):
         data = datetime(ano, mes, d)
         dia_semana = data.weekday()
 
-        if d > dia_fim:
-            preencher_descricao(ws, linha, data, "DESLIGADO")
+        if d < dia_inicio:
+            colunas = _ocorrencia(f"ADMITIDO EM {admissao}")
+        elif d > dia_fim:
+            colunas = _ocorrencia("DESLIGADO")
+        elif d in dias_de_ferias:
+            colunas = _ocorrencia("FÉRIAS")
         elif extras_100.get(d, 0) > 0:
-            preencher_dia_de_cem_por_cento(ws, linha, data, empresa, extras_100[d])
+            colunas = _marcacoes_de_cem_por_cento(data, empresa, extras_100[d])
         elif dia_semana == DOMINGO or dia_semana not in dias_trabalhados:
-            preencher_descricao(ws, linha, data, NOME_DIA_SEMANA[dia_semana])
+            colunas = _ocorrencia(NOME_DIA_SEMANA[dia_semana])
         elif data.date() in FERIADOS_BR:
-            preencher_descricao(
-                ws, linha, data, traduzir_feriado(FERIADOS_BR.get(data.date()))
-            )
+            colunas = _ocorrencia(traduzir_feriado(FERIADOS_BR.get(data.date())))
         elif d in dias_falta:
-            preencher_descricao(ws, linha, data, "FALTA")
+            colunas = _ocorrencia("FALTA")
         elif d in dias_atestado:
-            preencher_descricao(ws, linha, data, "ATESTADO")
+            colunas = _ocorrencia("ATESTADO")
         else:
-            preencher_dia_trabalhado(ws, linha, data, empresa, extras.get(d, 0))
+            colunas = _marcacoes_de_dia_trabalhado(data, empresa, extras.get(d, 0))
 
-        linha += 1
+        linhas.append({"data": data.strftime("%d/%m"), "colunas": colunas})
+
+    return {
+        "empresa": cabecalho_empresa(empresa),
+        "nome": nome,
+        "competencia": f"{MESES_PT[mes]}/{ano}",
+        "mes": mes,
+        "ano": ano,
+        "linhas": linhas,
+    }
+
+
+def _ocorrencia(texto):
+    """Ocorrência ocupa as seis colunas de marcação."""
+    return [texto] * 6
+
+
+def _periodo_de_ferias(dias_ferias, inicio_ferias, dia_inicio, dia_fim, ultimo_dia_mes):
+    dias_ferias = int(dias_ferias or 0)
+    if dias_ferias <= 0:
+        return set()
+
+    if inicio_ferias in (None, "", 0):
+        raise ValueError(
+            f"São {dias_ferias} dia(s) de férias: informe o dia em que começam."
+        )
+
+    inicio_ferias = int(inicio_ferias)
+    if not 1 <= inicio_ferias <= ultimo_dia_mes:
+        raise ValueError(
+            f"Início das férias deve estar entre 1 e {ultimo_dia_mes}."
+        )
+
+    return {
+        d for d in range(inicio_ferias, inicio_ferias + dias_ferias)
+        if dia_inicio <= d <= dia_fim
+    }
+
+
+def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
+                 atestados=0, dia_inicio=1, dia_fim=None, pasta_saida=None,
+                 horas_extras_100=0, dias_ferias=0, inicio_ferias=None):
+    """Gera o cartão ponto em Excel e devolve o caminho do arquivo."""
+    cartao = montar_cartao(
+        empresa_codigo, nome, mes, ano, horas_extras, faltas, atestados,
+        dia_inicio, dia_fim, horas_extras_100, dias_ferias, inicio_ferias,
+    )
+    return salvar_em_excel(cartao, pasta_saida)
+
+
+def salvar_em_excel(cartao, pasta_saida=None):
+    """Grava em Excel um cartão já montado.
+
+    Separado da montagem para que o Excel e o PDF do mesmo funcionário
+    saiam com as mesmas marcações.
+    """
+    if not ARQUIVO_MODELO.exists():
+        raise FileNotFoundError(f"Planilha modelo não encontrada: {ARQUIVO_MODELO}")
+
+    mes, ano, nome = cartao["mes"], cartao["ano"], cartao["nome"]
+
+    wb = load_workbook(ARQUIVO_MODELO)
+    ws = wb.active
+
+    ws[CELULA_EMPRESA] = cartao["empresa"]
+    ws[CELULA_NOME] = cartao["nome"]
+    ws[CELULA_MES_ANO] = cartao["competencia"]
+
+    for indice, registro in enumerate(cartao["linhas"]):
+        linha = LINHA_INICIAL + indice
+        set_valor(ws, linha, COL_DATA, registro["data"])
+        for coluna, valor in enumerate(registro["colunas"], start=COL_ENTRADA_MANHA):
+            set_valor(ws, linha, coluna, valor)
 
     # Sem pasta escolhida, organiza por mês dentro da pasta padrão
     pasta = Path(pasta_saida) if pasta_saida else PASTA_SAIDA / f"{ano}-{mes:02d}"
@@ -318,8 +392,8 @@ def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
     return caminho
 
 
-def preencher_dia_trabalhado(ws, linha, data, empresa, extra_min):
-    """Preenche as marcações de um dia efetivamente trabalhado."""
+def _marcacoes_de_dia_trabalhado(data, empresa, extra_min):
+    """As seis marcações de um dia normal de trabalho."""
     horario = horario_do_dia(empresa, data.weekday())
     variacoes = empresa["variacoes"]
 
@@ -328,22 +402,23 @@ def preencher_dia_trabalhado(ws, linha, data, empresa, extra_min):
         for campo in ("entrada", "saida_almoco", "volta_almoco", "saida")
     }
 
-    set_valor(ws, linha, COL_DATA, data.strftime("%d/%m"))
-    set_valor(ws, linha, COL_ENTRADA_MANHA, marcacoes["entrada"].strftime("%H:%M"))
-    set_valor(ws, linha, COL_SAIDA_MANHA, marcacoes["saida_almoco"].strftime("%H:%M"))
-    set_valor(ws, linha, COL_ENTRADA_TARDE, marcacoes["volta_almoco"].strftime("%H:%M"))
-    set_valor(ws, linha, COL_SAIDA_TARDE, marcacoes["saida"].strftime("%H:%M"))
+    colunas = [
+        marcacoes["entrada"].strftime("%H:%M"),
+        marcacoes["saida_almoco"].strftime("%H:%M"),
+        marcacoes["volta_almoco"].strftime("%H:%M"),
+        marcacoes["saida"].strftime("%H:%M"),
+    ]
 
     if extra_min > 0:
         fim_extra = marcacoes["saida"] + timedelta(minutes=extra_min)
-        set_valor(ws, linha, COL_ENTRADA_EXTRA, marcacoes["saida"].strftime("%H:%M"))
-        set_valor(ws, linha, COL_SAIDA_EXTRA, fim_extra.strftime("%H:%M"))
+        colunas += [marcacoes["saida"].strftime("%H:%M"), fim_extra.strftime("%H:%M")]
     else:
-        set_valor(ws, linha, COL_ENTRADA_EXTRA, "")
-        set_valor(ws, linha, COL_SAIDA_EXTRA, "")
+        colunas += ["", ""]
+
+    return colunas
 
 
-def preencher_dia_de_cem_por_cento(ws, linha, data, empresa, minutos):
+def _marcacoes_de_cem_por_cento(data, empresa, minutos):
     """Domingo ou feriado trabalhado: marcação normal, hora extra de 100%.
 
     Começa no horário de entrada da empresa e segue pelas horas lançadas,
@@ -358,23 +433,20 @@ def preencher_dia_de_cem_por_cento(ws, linha, data, empresa, minutos):
 
     minutos_da_manha = int((saida_almoco - entrada).total_seconds() // 60)
 
-    set_valor(ws, linha, COL_DATA, data.strftime("%d/%m"))
-    set_valor(ws, linha, COL_ENTRADA_MANHA, entrada.strftime("%H:%M"))
-
     # Sobra pequena não vale parar para o almoço: emenda tudo no período da manhã
     if minutos <= minutos_da_manha + MINIMO_PARA_VIRAR_TARDE:
         fim = entrada + timedelta(minutes=minutos)
-        set_valor(ws, linha, COL_SAIDA_MANHA, fim.strftime("%H:%M"))
-        set_valor(ws, linha, COL_ENTRADA_TARDE, "")
-        set_valor(ws, linha, COL_SAIDA_TARDE, "")
-    else:
-        fim = volta_almoco + timedelta(minutes=minutos - minutos_da_manha)
-        set_valor(ws, linha, COL_SAIDA_MANHA, saida_almoco.strftime("%H:%M"))
-        set_valor(ws, linha, COL_ENTRADA_TARDE, volta_almoco.strftime("%H:%M"))
-        set_valor(ws, linha, COL_SAIDA_TARDE, fim.strftime("%H:%M"))
+        return [entrada.strftime("%H:%M"), fim.strftime("%H:%M"), "", "", "", ""]
 
-    set_valor(ws, linha, COL_ENTRADA_EXTRA, "")
-    set_valor(ws, linha, COL_SAIDA_EXTRA, "")
+    fim = volta_almoco + timedelta(minutes=minutos - minutos_da_manha)
+    return [
+        entrada.strftime("%H:%M"),
+        saida_almoco.strftime("%H:%M"),
+        volta_almoco.strftime("%H:%M"),
+        fim.strftime("%H:%M"),
+        "",
+        "",
+    ]
 
 
 def validar_entrada(nome, mes, ano, horas_extras, faltas, atestados):

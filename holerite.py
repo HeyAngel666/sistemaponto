@@ -270,10 +270,6 @@ def ler_holerite(caminho_pdf):
         for rubrica in sorted(rubricas_estranhas):
             registro["avisos"].append(f"rubrica em horas não reconhecida: {rubrica}")
 
-        if registro["dias_ferias"]:
-            registro["avisos"].append(
-                f"{registro['dias_ferias']} dia(s) de férias — informe o período"
-            )
         if registro["empresa_codigo"] is None:
             registro["avisos"].append("empresa não reconhecida pelo CNPJ")
         if "?" in registro["nome"]:

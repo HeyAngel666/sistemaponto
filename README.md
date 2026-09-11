@@ -26,7 +26,14 @@ desligamento saem marcados como DESLIGADO.
 3. As horas extras são separadas por percentual: **50%** (dias úteis) e
    **100%** (domingos e feriados). Para corrigir qualquer valor, dê
    **dois cliques** na célula.
-4. **Gerar todos os cartões**.
+4. Quem estiver de **férias** aparece com os dias na coluna Férias. Dê
+   dois cliques nela para informar o dia em que começam — sem isso, o
+   cartão dessa pessoa não é gerado.
+5. **Gerar todos os cartões**.
+
+Além dos arquivos individuais em Excel, sai um **PDF único com todos os
+cartões** (uma página por funcionário), pronto para mandar direto para a
+impressora. Se não quiser o PDF, é só desmarcar a opção.
 
 Se preferir conferir antes, use **Salvar planilha para conferir**: sai a
 planilha já preenchida, você ajusta no Excel e importa pela aba
@@ -82,6 +89,9 @@ mudar o horário da Montsul, por exemplo, basta editar:
 - **Horas extras de 100%** lançadas em domingos e feriados, como dia
   trabalhado: entrada no horário normal da empresa, até 8 h por dia
 - **Faltas** e **atestados** sorteados entre os dias úteis do período
+- **Férias** marcadas em dias corridos, a partir do dia informado
+- Dias antes da admissão saem como **ADMITIDO EM DD/MM**, e depois do
+  desligamento como **DESLIGADO**
 
 ---
 
@@ -134,6 +144,7 @@ funciona do mesmo jeito e não é bloqueado.
 | `gerador.py` | Monta o cartão em Excel |
 | `planilha.py` | Planilha de preenchimento em lote |
 | `holerite.py` | Leitura dos holerites em PDF |
+| `cartao_pdf.py` | Monta o PDF único para impressão |
 | `letras_holerite.json` | Tabela que decifra o texto do holerite |
 | `modelo/` | Planilha modelo do cartão |
 | `cartoes/` | Cartões gerados |
