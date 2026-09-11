@@ -143,6 +143,30 @@ def _numero_seguinte(linhas, indice):
     return 0
 
 
+def _horas_seguintes(linhas, indice):
+    """Referência de horas, no formato HH:MM, convertida em horas decimais."""
+    if indice + 1 >= len(linhas):
+        return 0.0
+
+    achado = re.fullmatch(r"(\d{1,3}):(\d{2})", linhas[indice + 1])
+    if achado:
+        return int(achado.group(1)) + int(achado.group(2)) / 60
+
+    if re.fullmatch(r"\d{1,3}", linhas[indice + 1]):
+        return float(linhas[indice + 1])
+
+    return 0.0
+
+
+def _e_rubrica_de_extras(linha):
+    """A rubrica de hora extra (ex: 'HORA EXTRA 050%').
+
+    O DSR sobre horas extras não entra: é reflexo, não hora trabalhada.
+    """
+    texto = linha.upper()
+    return "HORA" in texto and "EXTRA" in texto and "DSR" not in texto
+
+
 def ler_holerite(caminho_pdf):
     """Lê o PDF e devolve a lista de funcionários encontrados."""
     paginas, nao_reconhecidas = ler_paginas(caminho_pdf)
@@ -184,8 +208,9 @@ def ler_holerite(caminho_pdf):
             if re.search(r"\bFALTAS$", linha):
                 registro["faltas"] = _numero_seguinte(linhas, indice)
 
-            if "HORAS EXTRAS" in linha or re.search(r"\bH\.?\s?EXTRA", linha):
-                registro["horas_extras"] = _numero_seguinte(linhas, indice)
+            # pode haver mais de uma faixa de hora extra (50%, 100%): somam
+            if _e_rubrica_de_extras(linha):
+                registro["horas_extras"] += _horas_seguintes(linhas, indice)
 
             if "FERIAS" in linha and "DEDUCAO" not in linha:
                 dias = re.search(r"SALARIO NORMAL", " ".join(linhas))
@@ -200,6 +225,8 @@ def ler_holerite(caminho_pdf):
 
         if not registro["nome"]:
             continue
+
+        registro["horas_extras"] = round(registro["horas_extras"], 2)
 
         if registro["dias_ferias"]:
             registro["avisos"].append(
