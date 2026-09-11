@@ -84,36 +84,30 @@ mudar o horário da Montsul, por exemplo, basta editar:
 
 ## Instalação (primeira vez)
 
-Precisa do [Python 3.10 ou superior](https://www.python.org/downloads/)
-instalado — na tela de instalação, marque **"Add Python to PATH"**.
+Baixe o arquivo **`Instalar.bat`** e dê dois cliques nele. Ele cuida de
+tudo: instala o Python e o Git se faltarem, baixa o sistema e cria o
+atalho **"Cartão Ponto"** na Área de Trabalho.
 
-Depois é só dar dois cliques em **`Abrir Cartao Ponto.bat`**. Na primeira
-vez ele instala sozinho o que falta (demora cerca de 1 minuto) e abre o
-programa. Nas próximas, abre direto.
+> Se o Windows bloquear o arquivo: clique com o botão direito nele →
+> **Propriedades** → marque **"Desbloquear"** → **OK**.
 
-Para deixar à mão: clique com o botão direito nesse arquivo →
-**Enviar para** → **Área de trabalho (criar atalho)**.
+Se o Python ou o Git precisarem ser instalados, o instalador pede para
+você abri-lo **mais uma vez** ao final — é normal, basta repetir.
 
-## Manter o sistema atualizado
+Depois disso, é só usar o atalho da Área de Trabalho. **O sistema se
+atualiza sozinho** toda vez que você abre.
 
-Se a pasta foi criada com o Git (comando `git clone`), basta dar dois
-cliques em **`Atualizar Sistema.bat`** para baixar a versão mais recente.
+### Atualizar na mão
 
-Para começar a usar isso:
+Se quiser forçar uma atualização sem abrir o programa, dê dois cliques em
+**`Atualizar Sistema.bat`**, dentro da pasta do sistema.
 
-1. Instale o Git: https://git-scm.com/download/win (pode aceitar tudo o
-   que ele sugerir durante a instalação)
-2. Abra a pasta onde quer o sistema (ex: Área de Trabalho), clique na
-   barra de endereço, digite `cmd` e dê Enter
-3. Na janela preta, cole e dê Enter:
+## Onde o sistema fica instalado
 
-```
-git clone https://github.com/HeyAngel666/sistemaponto.git
-```
+Em `C:\Users\SEU_USUARIO\AppData\Local\CartaoPonto`.
 
-Isso cria a pasta `sistemaponto` já ligada às atualizações. A pasta
-antiga pode ser apagada depois (os cartões gerados ficam onde você
-escolheu salvar, não dentro dela).
+Os cartões gerados **não** ficam lá — vão para a pasta que você escolhe
+na hora de gerar.
 
 ## Gerar o programa como .exe (opcional)
 
