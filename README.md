@@ -41,8 +41,8 @@ marcados por você.
 2. Preencha uma linha por funcionário e salve.
 3. **Importar planilha e gerar** → selecione o arquivo preenchido.
 
-Os cartões são salvos na pasta `cartoes`, separados por mês
-(exemplo: `cartoes/2026-09/JOÃO DA SILVA - 09-2026.xlsx`).
+Ao clicar em gerar, o sistema pergunta **em qual pasta salvar** os cartões.
+Ele lembra a última pasta usada e já abre nela na próxima vez.
 
 ---
 

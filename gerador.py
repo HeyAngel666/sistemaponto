@@ -283,8 +283,8 @@ def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
 
         linha += 1
 
-    pasta = Path(pasta_saida) if pasta_saida else PASTA_SAIDA
-    pasta = pasta / f"{ano}-{mes:02d}"
+    # Sem pasta escolhida, organiza por mês dentro da pasta padrão
+    pasta = Path(pasta_saida) if pasta_saida else PASTA_SAIDA / f"{ano}-{mes:02d}"
     pasta.mkdir(parents=True, exist_ok=True)
 
     caminho = pasta / f"{nome_arquivo_seguro(nome)} - {mes:02d}-{ano}.xlsx"

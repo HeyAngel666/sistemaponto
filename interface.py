@@ -34,6 +34,7 @@ class AplicacaoCartaoPonto:
         self.janela.configure(bg=COR_FUNDO)
 
         self.fila = queue.Queue()
+        self.ultima_pasta = PASTA_SAIDA
 
         self._configurar_estilo()
         self._montar_cabecalho()
@@ -346,6 +347,19 @@ class AplicacaoCartaoPonto:
             + cadastro.resumo_jornada(empresa)
         )
 
+    def _escolher_pasta(self, titulo="Onde salvar os cartões?"):
+        """Pergunta a pasta de destino. Devolve None se o usuário cancelar."""
+        escolhida = filedialog.askdirectory(
+            title=titulo,
+            initialdir=str(self.ultima_pasta),
+            mustexist=False,
+        )
+        if not escolhida:
+            return None
+
+        self.ultima_pasta = Path(escolhida)
+        return self.ultima_pasta
+
     def _status(self, mensagem):
         self.var_status.set(mensagem)
         self.janela.update_idletasks()
@@ -356,7 +370,16 @@ class AplicacaoCartaoPonto:
             ano = int(self.spin_ano.get())
             ultimo_dia = calendar.monthrange(ano, mes)[1]
 
+            if not self.entry_nome.get().strip():
+                raise ValueError("Informe o nome do funcionário.")
+
+            pasta = self._escolher_pasta()
+            if pasta is None:
+                self._status("Geração cancelada.")
+                return
+
             caminho = gerar_cartao(
+                pasta_saida=pasta,
                 empresa_codigo=self.var_empresa.get(),
                 nome=self.entry_nome.get().strip(),
                 mes=mes,
@@ -484,11 +507,17 @@ class AplicacaoCartaoPonto:
             )
             return
 
+        pasta = self._escolher_pasta()
+        if pasta is None:
+            self._status("Geração cancelada.")
+            return
+
         self.abas.select(2)
         self.lista_resultado.delete(*self.lista_resultado.get_children())
 
         trabalhos = [
             {
+                "pasta_saida": pasta,
                 "empresa_codigo": r["empresa_codigo"],
                 "nome": r["nome"],
                 "mes": r["mes"],
@@ -541,6 +570,14 @@ class AplicacaoCartaoPonto:
             messagebox.showerror("Planilha inválida", str(erro))
             return
 
+        pasta = self._escolher_pasta()
+        if pasta is None:
+            self._status("Geração cancelada.")
+            return
+
+        for registro in registros:
+            registro["pasta_saida"] = pasta
+
         self.lista_resultado.delete(*self.lista_resultado.get_children())
         self.btn_importar.configure(state="disabled")
         threading.Thread(
@@ -565,7 +602,8 @@ class AplicacaoCartaoPonto:
                 ("status", f"Processando... {gerados + falhas}/{len(registros)}")
             )
 
-        self.fila.put(("fim", gerados, falhas))
+        pasta = registros[0].get("pasta_saida") if registros else PASTA_SAIDA
+        self.fila.put(("fim", gerados, falhas, pasta))
 
     def _consumir_fila(self):
         """Só a tela mexe na tela: lê o que as gerações produziram."""
@@ -580,7 +618,7 @@ class AplicacaoCartaoPonto:
                 elif mensagem[0] == "status":
                     self.var_status.set(mensagem[1])
                 elif mensagem[0] == "fim":
-                    gerados, falhas = mensagem[1], mensagem[2]
+                    gerados, falhas, pasta = mensagem[1], mensagem[2], mensagem[3]
                     self.btn_importar.configure(state="normal")
                     self.var_status.set(
                         f"Concluído: {gerados} cartão(ões) gerado(s), {falhas} com erro."
@@ -588,7 +626,7 @@ class AplicacaoCartaoPonto:
                     messagebox.showinfo(
                         "Geração concluída",
                         f"{gerados} cartão(ões) gerado(s).\n{falhas} com erro.\n\n"
-                        f"Pasta: {PASTA_SAIDA}",
+                        f"Pasta: {pasta}",
                     )
         except queue.Empty:
             pass
@@ -596,13 +634,14 @@ class AplicacaoCartaoPonto:
         self.janela.after(150, self._consumir_fila)
 
     def abrir_pasta_saida(self):
-        PASTA_SAIDA.mkdir(parents=True, exist_ok=True)
+        pasta = self.ultima_pasta
+        pasta.mkdir(parents=True, exist_ok=True)
         if sys.platform.startswith("win"):
-            subprocess.Popen(["explorer", str(PASTA_SAIDA)])
+            subprocess.Popen(["explorer", str(pasta)])
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(PASTA_SAIDA)])
+            subprocess.Popen(["open", str(pasta)])
         else:
-            subprocess.Popen(["xdg-open", str(PASTA_SAIDA)])
+            subprocess.Popen(["xdg-open", str(pasta)])
 
     @staticmethod
     def _numero(texto, campo, padrao=0):
