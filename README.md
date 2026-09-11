@@ -18,6 +18,23 @@ Os dias inicial e final só precisam ser preenchidos quando o funcionário
 foi **admitido** ou **desligado** no meio do mês. Os dias após o
 desligamento saem marcados como DESLIGADO.
 
+### Gerar o mês inteiro a partir do holerite (mais rápido)
+
+1. Aba **Pelo holerite (PDF)** → **Abrir holerite (PDF)**.
+2. O sistema lista todos os funcionários do mês, com as faltas e a data de
+   admissão de cada um, e identifica a empresa pelo CNPJ.
+3. Horas extras não vêm no holerite — dê **dois cliques** na coluna
+   "Horas extras" do funcionário para preencher.
+4. **Gerar todos os cartões**.
+
+Se preferir conferir antes, use **Salvar planilha para conferir**: sai a
+planilha já preenchida, você ajusta no Excel e importa pela aba
+"Vários (planilha)".
+
+Quem estiver de **férias** aparece com um aviso na coluna Observação — o
+período das férias não vem no holerite, então esses dias precisam ser
+marcados por você.
+
 ### Gerar vários funcionários de uma vez
 
 1. Aba **Vários (planilha)** → **Criar planilha em branco**.
@@ -98,5 +115,7 @@ funciona do mesmo jeito e não é bloqueado.
 | `empresas.py` | Cadastro das empresas e horários |
 | `gerador.py` | Monta o cartão em Excel |
 | `planilha.py` | Planilha de preenchimento em lote |
+| `holerite.py` | Leitura dos holerites em PDF |
+| `letras_holerite.json` | Tabela que decifra o texto do holerite |
 | `modelo/` | Planilha modelo do cartão |
 | `cartoes/` | Cartões gerados |

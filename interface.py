@@ -1,14 +1,16 @@
 """Interface do sistema de cartão ponto."""
 
 import calendar
+import queue
 import subprocess
 import sys
 import threading
 from datetime import date
 from pathlib import Path
-from tkinter import StringVar, Tk, filedialog, messagebox, ttk
+from tkinter import StringVar, Tk, filedialog, messagebox, simpledialog, ttk
 
 import empresas as cadastro
+import holerite
 import planilha
 from gerador import MESES_PT, PASTA_SAIDA, gerar_cartao
 
@@ -31,12 +33,15 @@ class AplicacaoCartaoPonto:
         self.janela.minsize(760, 720)
         self.janela.configure(bg=COR_FUNDO)
 
+        self.fila = queue.Queue()
+
         self._configurar_estilo()
         self._montar_cabecalho()
         self._montar_abas()
         self._montar_rodape()
 
         self._atualizar_resumo_empresa()
+        self.janela.after(150, self._consumir_fila)
 
     # ---------------- Estilo ----------------
     def _configurar_estilo(self):
@@ -107,12 +112,15 @@ class AplicacaoCartaoPonto:
         self.abas.pack(fill="both", expand=True, padx=18, pady=(14, 8))
 
         aba_individual = ttk.Frame(self.abas, padding=18)
+        aba_holerite = ttk.Frame(self.abas, padding=18)
         aba_lote = ttk.Frame(self.abas, padding=18)
 
         self.abas.add(aba_individual, text="  Um funcionário  ")
+        self.abas.add(aba_holerite, text="  Pelo holerite (PDF)  ")
         self.abas.add(aba_lote, text="  Vários (planilha)  ")
 
         self._montar_aba_individual(aba_individual)
+        self._montar_aba_holerite(aba_holerite)
         self._montar_aba_lote(aba_lote)
 
     def _montar_aba_individual(self, pai):
@@ -217,6 +225,68 @@ class AplicacaoCartaoPonto:
             command=self.abrir_pasta_saida,
         ).pack(side="left", padx=(10, 0))
 
+    def _montar_aba_holerite(self, pai):
+        explicacao = ttk.Labelframe(pai, text=" Como funciona ", padding=14)
+        explicacao.pack(fill="x")
+
+        ttk.Label(
+            explicacao,
+            justify="left",
+            wraplength=660,
+            text="Abra o PDF dos holerites do mês. O sistema lê os funcionários, "
+                 "as faltas e a data de admissão de cada um, e gera os cartões.\n"
+                 "Horas extras não vêm no holerite — preencha na coluna abaixo "
+                 "clicando duas vezes, ou depois na planilha.",
+        ).pack(anchor="w")
+
+        acoes = ttk.Frame(pai)
+        acoes.pack(fill="x", pady=(16, 0))
+
+        ttk.Button(
+            acoes, text="Abrir holerite (PDF)", style="Secundario.TButton",
+            command=self.abrir_holerite,
+        ).pack(side="left")
+
+        self.btn_gerar_holerite = ttk.Button(
+            acoes, text="Gerar todos os cartões", style="Principal.TButton",
+            command=self.gerar_do_holerite, state="disabled",
+        )
+        self.btn_gerar_holerite.pack(side="left", padx=(10, 0))
+
+        self.btn_salvar_planilha = ttk.Button(
+            acoes, text="Salvar planilha para conferir", style="Secundario.TButton",
+            command=self.salvar_planilha_do_holerite, state="disabled",
+        )
+        self.btn_salvar_planilha.pack(side="left", padx=(10, 0))
+
+        quadro = ttk.Labelframe(pai, text=" Funcionários encontrados ", padding=10)
+        quadro.pack(fill="both", expand=True, pady=(16, 0))
+
+        colunas = ("nome", "faltas", "extras", "inicio", "aviso")
+        self.lista_holerite = ttk.Treeview(
+            quadro, columns=colunas, show="headings", height=12
+        )
+        for coluna, titulo, largura in (
+            ("nome", "Funcionário", 235),
+            ("faltas", "Faltas", 55),
+            ("extras", "Horas extras", 95),
+            ("inicio", "Dia inicial", 80),
+            ("aviso", "Observação", 200),
+        ):
+            self.lista_holerite.heading(coluna, text=titulo)
+            self.lista_holerite.column(coluna, width=largura)
+
+        self.lista_holerite.pack(fill="both", expand=True, side="left")
+        self.lista_holerite.bind("<Double-1>", self._editar_celula_holerite)
+
+        rolagem = ttk.Scrollbar(
+            quadro, orient="vertical", command=self.lista_holerite.yview
+        )
+        rolagem.pack(side="right", fill="y")
+        self.lista_holerite.configure(yscrollcommand=rolagem.set)
+
+        self.registros_holerite = []
+
     def _montar_aba_lote(self, pai):
         explicacao = ttk.Labelframe(pai, text=" Como funciona ", padding=14)
         explicacao.pack(fill="x")
@@ -308,6 +378,135 @@ class AplicacaoCartaoPonto:
             self._status("Falha ao gerar o cartão.")
             messagebox.showerror("Não foi possível gerar", str(erro))
 
+    def abrir_holerite(self):
+        caminho = filedialog.askopenfilename(
+            title="Selecionar o PDF dos holerites",
+            filetypes=[("PDF", "*.pdf")],
+        )
+        if not caminho:
+            return
+
+        self._status("Lendo o holerite...")
+        try:
+            registros = holerite.ler_holerite(caminho)
+        except Exception as erro:
+            self._status("Não foi possível ler o holerite.")
+            messagebox.showerror("Não foi possível ler o holerite", str(erro))
+            return
+
+        for registro in registros:
+            registro["dia_inicio"] = holerite.dia_inicial_por_admissao(registro)
+            registro["atestados"] = 0
+
+        self.registros_holerite = registros
+        self._recarregar_lista_holerite()
+
+        self.btn_gerar_holerite.configure(state="normal")
+        self.btn_salvar_planilha.configure(state="normal")
+
+        competencia = f"{registros[0]['mes']:02d}/{registros[0]['ano']}"
+        empresa = registros[0]["empresa_codigo"] or "?"
+        self._status(
+            f"{len(registros)} funcionário(s) — {empresa}, competência {competencia}."
+        )
+
+    def _recarregar_lista_holerite(self):
+        self.lista_holerite.delete(*self.lista_holerite.get_children())
+        for indice, registro in enumerate(self.registros_holerite):
+            self.lista_holerite.insert(
+                "", "end", iid=str(indice),
+                values=(
+                    registro["nome"],
+                    registro["faltas"],
+                    registro["horas_extras"],
+                    registro["dia_inicio"],
+                    "; ".join(registro["avisos"]),
+                ),
+            )
+
+    def _editar_celula_holerite(self, evento):
+        """Duplo clique em Faltas, Horas extras ou Dia inicial edita o valor."""
+        item = self.lista_holerite.identify_row(evento.y)
+        coluna = self.lista_holerite.identify_column(evento.x)
+        if not item or coluna not in ("#2", "#3", "#4"):
+            return
+
+        campo, rotulo = {
+            "#2": ("faltas", "Faltas"),
+            "#3": ("horas_extras", "Horas extras"),
+            "#4": ("dia_inicio", "Dia inicial"),
+        }[coluna]
+
+        registro = self.registros_holerite[int(item)]
+        resposta = simpledialog.askstring(
+            rotulo,
+            f"{rotulo} de {registro['nome']}:",
+            initialvalue=str(registro[campo]),
+            parent=self.janela,
+        )
+        if resposta is None:
+            return
+
+        try:
+            valor = float(str(resposta).strip().replace(",", "."))
+        except ValueError:
+            messagebox.showerror("Valor inválido", f"'{resposta}' não é um número.")
+            return
+
+        registro[campo] = valor if campo == "horas_extras" else int(valor)
+        self._recarregar_lista_holerite()
+
+    def salvar_planilha_do_holerite(self):
+        caminho = filedialog.asksaveasfilename(
+            title="Salvar planilha preenchida",
+            defaultextension=".xlsx",
+            initialfile="Funcionários do mês.xlsx",
+            filetypes=[("Planilha do Excel", "*.xlsx")],
+        )
+        if not caminho:
+            return
+
+        try:
+            planilha.criar_planilha_modelo(caminho, self.registros_holerite)
+            self._status(f"Planilha salva: {caminho}")
+            messagebox.showinfo("Planilha salva", str(caminho))
+        except Exception as erro:
+            messagebox.showerror("Não foi possível salvar", str(erro))
+
+    def gerar_do_holerite(self):
+        pendentes = [
+            r for r in self.registros_holerite if not r.get("empresa_codigo")
+        ]
+        if pendentes:
+            messagebox.showerror(
+                "Empresa não reconhecida",
+                "O CNPJ do holerite não corresponde a nenhuma empresa cadastrada.",
+            )
+            return
+
+        self.abas.select(2)
+        self.lista_resultado.delete(*self.lista_resultado.get_children())
+
+        trabalhos = [
+            {
+                "empresa_codigo": r["empresa_codigo"],
+                "nome": r["nome"],
+                "mes": r["mes"],
+                "ano": r["ano"],
+                "horas_extras": r["horas_extras"],
+                "faltas": r["faltas"],
+                "atestados": r.get("atestados", 0),
+                "dia_inicio": r["dia_inicio"],
+                "dia_fim": calendar.monthrange(r["ano"], r["mes"])[1],
+            }
+            for r in self.registros_holerite
+        ]
+
+        self.btn_importar.configure(state="disabled")
+        threading.Thread(
+            target=self._processar_lote, args=(trabalhos,), daemon=True
+        ).start()
+
     def criar_planilha_modelo(self):
         caminho = filedialog.asksaveasfilename(
             title="Salvar planilha em branco",
@@ -349,29 +548,52 @@ class AplicacaoCartaoPonto:
         ).start()
 
     def _processar_lote(self, registros):
-        gerados = 0
-        falhas = 0
+        """Roda fora da tela; manda os resultados pela fila."""
+        gerados = falhas = 0
 
         for registro in registros:
             nome = registro["nome"]
             try:
                 arquivo = gerar_cartao(**registro)
-                self.lista_resultado.insert(
-                    "", "end", values=(nome, f"Gerado: {Path(arquivo).name}")
-                )
+                self.fila.put(("linha", nome, f"Gerado: {Path(arquivo).name}"))
                 gerados += 1
             except Exception as erro:
-                self.lista_resultado.insert("", "end", values=(nome, f"ERRO: {erro}"))
+                self.fila.put(("linha", nome, f"ERRO: {erro}"))
                 falhas += 1
 
-            self._status(f"Processando... {gerados + falhas}/{len(registros)}")
+            self.fila.put(
+                ("status", f"Processando... {gerados + falhas}/{len(registros)}")
+            )
 
-        self.btn_importar.configure(state="normal")
-        self._status(f"Concluído: {gerados} cartão(ões) gerado(s), {falhas} com erro.")
-        messagebox.showinfo(
-            "Importação concluída",
-            f"{gerados} cartão(ões) gerado(s).\n{falhas} com erro.\n\nPasta: {PASTA_SAIDA}",
-        )
+        self.fila.put(("fim", gerados, falhas))
+
+    def _consumir_fila(self):
+        """Só a tela mexe na tela: lê o que as gerações produziram."""
+        try:
+            while True:
+                mensagem = self.fila.get_nowait()
+
+                if mensagem[0] == "linha":
+                    self.lista_resultado.insert(
+                        "", "end", values=(mensagem[1], mensagem[2])
+                    )
+                elif mensagem[0] == "status":
+                    self.var_status.set(mensagem[1])
+                elif mensagem[0] == "fim":
+                    gerados, falhas = mensagem[1], mensagem[2]
+                    self.btn_importar.configure(state="normal")
+                    self.var_status.set(
+                        f"Concluído: {gerados} cartão(ões) gerado(s), {falhas} com erro."
+                    )
+                    messagebox.showinfo(
+                        "Geração concluída",
+                        f"{gerados} cartão(ões) gerado(s).\n{falhas} com erro.\n\n"
+                        f"Pasta: {PASTA_SAIDA}",
+                    )
+        except queue.Empty:
+            pass
+
+        self.janela.after(150, self._consumir_fila)
 
     def abrir_pasta_saida(self):
         PASTA_SAIDA.mkdir(parents=True, exist_ok=True)

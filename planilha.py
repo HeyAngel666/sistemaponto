@@ -39,8 +39,12 @@ def normalizar(texto):
     )
 
 
-def criar_planilha_modelo(caminho):
-    """Cria a planilha em branco para o usuário preencher."""
+def criar_planilha_modelo(caminho, registros=None):
+    """Cria a planilha de funcionários.
+
+    Sem registros, sai em branco (com uma linha de exemplo) para o usuário
+    preencher. Com registros — vindos do holerite — já sai preenchida.
+    """
     wb = Workbook()
     ws = wb.active
     ws.title = "Funcionários"
@@ -55,7 +59,9 @@ def criar_planilha_modelo(caminho):
 
     ajuda = ws.cell(
         row=2, column=1,
-        value="A linha em amarelo é só um exemplo — apague antes de importar.",
+        value="Confira os dados e ajuste o que for preciso antes de importar."
+        if registros else
+        "A linha em amarelo é só um exemplo — apague antes de importar.",
     )
     ajuda.font = Font(name=fonte, size=10, italic=True, color="757575")
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(COLUNAS))
@@ -75,15 +81,37 @@ def criar_planilha_modelo(caminho):
 
         ws.column_dimensions[cel.column_letter].width = max(14, len(nome_coluna) + 4)
 
-    exemplo = ["MONTSUL", "JOÃO DA SILVA", 8, 2026, 12, 1, 0, None, None]
-    for idx, valor in enumerate(exemplo, start=1):
-        cel = ws.cell(row=linha_cabecalho + 2, column=idx, value=valor)
-        cel.font = Font(name=fonte, size=10)
-        cel.fill = PatternFill("solid", fgColor="FFF9C4")
-        cel.alignment = Alignment(horizontal="center", vertical="center")
-        cel.border = borda
+    primeira_linha_livre = linha_cabecalho + 2
 
-    primeira_linha_livre = linha_cabecalho + 3
+    if registros:
+        for registro in registros:
+            valores = [
+                registro.get("empresa_codigo") or "",
+                registro.get("nome", ""),
+                registro.get("mes"),
+                registro.get("ano"),
+                registro.get("horas_extras", 0),
+                registro.get("faltas", 0),
+                registro.get("atestados", 0),
+                registro.get("dia_inicio") if registro.get("dia_inicio", 1) != 1 else None,
+                registro.get("dia_fim"),
+            ]
+            for idx, valor in enumerate(valores, start=1):
+                cel = ws.cell(row=primeira_linha_livre, column=idx, value=valor)
+                cel.font = Font(name=fonte, size=10)
+                cel.alignment = Alignment(horizontal="center", vertical="center")
+                cel.border = borda
+            primeira_linha_livre += 1
+    else:
+        exemplo = ["MONTSUL", "JOÃO DA SILVA", 8, 2026, 12, 1, 0, None, None]
+        for idx, valor in enumerate(exemplo, start=1):
+            cel = ws.cell(row=primeira_linha_livre, column=idx, value=valor)
+            cel.font = Font(name=fonte, size=10)
+            cel.fill = PatternFill("solid", fgColor="FFF9C4")
+            cel.alignment = Alignment(horizontal="center", vertical="center")
+            cel.border = borda
+        primeira_linha_livre += 1
+
     for row in range(primeira_linha_livre, primeira_linha_livre + 40):
         for col in range(1, len(COLUNAS) + 1):
             cel = ws.cell(row=row, column=col)
@@ -98,7 +126,7 @@ def criar_planilha_modelo(caminho):
 
     ws.row_dimensions[linha_cabecalho].height = 24
     ws.row_dimensions[linha_cabecalho + 1].height = 30
-    ws.freeze_panes = ws.cell(row=primeira_linha_livre, column=1)
+    ws.freeze_panes = ws.cell(row=linha_cabecalho + 2, column=1)
 
     caminho = Path(caminho)
     wb.save(caminho)
