@@ -70,20 +70,22 @@ mudar o horário da Montsul, por exemplo, basta editar:
 Precisa do [Python 3.10 ou superior](https://www.python.org/downloads/)
 instalado — na tela de instalação, marque **"Add Python to PATH"**.
 
-Depois, na pasta do projeto:
+Depois é só dar dois cliques em **`Abrir Cartao Ponto.bat`**. Na primeira
+vez ele instala sozinho o que falta (demora cerca de 1 minuto) e abre o
+programa. Nas próximas, abre direto.
 
-```
-pip install -r requirements.txt
-python main.py
-```
+Para deixar à mão: clique com o botão direito nesse arquivo →
+**Enviar para** → **Área de trabalho (criar atalho)**.
 
-## Gerar o programa como .exe
+## Gerar o programa como .exe (opcional)
 
 Dê dois cliques em **`gerar_exe.bat`**. Ao terminar, o programa fica em
-`dist\Cartao Ponto.exe` — esse arquivo pode ser copiado para a área de
-trabalho e aberto sem precisar do Python.
+`dist\Cartao Ponto.exe`.
 
-Os cartões gerados ficam na pasta `cartoes`, criada ao lado do `.exe`.
+**Atenção:** no Windows 11, o *Controle de Aplicativos Inteligente*
+(Smart App Control) bloqueia executáveis sem assinatura digital — é o
+caso deste. Se isso acontecer, use o `Abrir Cartao Ponto.bat`, que
+funciona do mesmo jeito e não é bloqueado.
 
 ---
 
