@@ -12,8 +12,8 @@ FONTE_NEGRITO = "hebo"
 
 ALTURA_TITULO = 30
 ALTURA_CABECALHO = 18
-ALTURA_LINHA = 17
-ALTURA_ASSINATURA = 44
+ALTURA_LINHA = 16
+ALTURA_ESPELHO = 14
 
 # Largura de cada coluna: data + 6 marcações
 LARGURAS = [52, 78, 78, 78, 78, 78, 78]
@@ -69,15 +69,10 @@ def desenhar_cartao(pagina, cartao):
     pagina.insert_text((esquerda + 60, y + 13), cartao["empresa"], fontname=FONTE, fontsize=8)
     y += ALTURA_CABECALHO
 
-    # ---- nome e competência ----
+    # ---- nome ----
     pagina.draw_rect(pymupdf.Rect(esquerda, y, direita, y + ALTURA_CABECALHO), color=PRETO, width=0.8)
     pagina.insert_text((esquerda + 5, y + 13), "NOME:", fontname=FONTE_NEGRITO, fontsize=8)
     pagina.insert_text((esquerda + 60, y + 13), cartao["nome"], fontname=FONTE, fontsize=8)
-
-    competencia = f"MÊS/ANO: {cartao['competencia']}"
-    largura = pymupdf.get_text_length(competencia, fontname=FONTE_NEGRITO, fontsize=8)
-    pagina.insert_text((direita - largura - 12, y + 13), competencia,
-                       fontname=FONTE_NEGRITO, fontsize=8)
     y += ALTURA_CABECALHO
 
     # ---- cabeçalho da tabela (duas linhas) ----
@@ -122,11 +117,43 @@ def desenhar_cartao(pagina, cartao):
                      color=PRETO, width=0.8)
 
     # ---- assinatura ----
-    y += 16
-    pagina.insert_text((esquerda + 5, y + 26), "ASSINATURA DO EMPREGADO:",
+    y += 14
+    pagina.insert_text((esquerda + 5, y + 22), "ASSINATURA EMPREGADO:",
                        fontname=FONTE_NEGRITO, fontsize=8)
-    pagina.draw_line(pymupdf.Point(esquerda + 160, y + 28),
-                     pymupdf.Point(direita - 10, y + 28), color=PRETO, width=0.6)
+    pagina.draw_line(pymupdf.Point(esquerda + 145, y + 24),
+                     pymupdf.Point(direita - 10, y + 24), color=PRETO, width=0.6)
+    y += 34
+
+    if cartao.get("espelho"):
+        desenhar_espelho(pagina, cartao["espelho"], x, y)
+
+
+def desenhar_espelho(pagina, espelho, x, y):
+    """Quadro da jornada no rodapé, como no modelo da empresa."""
+    esquerda, direita = x[0], x[-1]
+
+    _texto_centralizado(pagina, "JORNADA DE TRABALHO", esquerda, direita, y + 11,
+                        9, negrito=True)
+    y += 15
+
+    # Como no modelo: entrada e saída em uma coluna cada, volta e saída da
+    # tarde ocupando duas colunas da tabela
+    FAIXAS = ((1, 2), (2, 3), (3, 5), (5, 7))
+
+    topo = y
+    for dia, *marcacoes in espelho:
+        pagina.insert_text((esquerda + 4, y + 10), dia, fontname=FONTE, fontsize=6)
+        for (inicio, fim), valor in zip(FAIXAS, marcacoes):
+            _texto_centralizado(pagina, valor, x[inicio], x[fim], y + 10, 7.5)
+
+        y += ALTURA_ESPELHO
+        pagina.draw_line(pymupdf.Point(esquerda, y), pymupdf.Point(direita, y),
+                         color=CINZA, width=0.3)
+
+    pagina.draw_rect(pymupdf.Rect(esquerda, topo, direita, y), color=PRETO, width=0.8)
+    for posicao in (x[1], x[2], x[3], x[5]):
+        pagina.draw_line(pymupdf.Point(posicao, topo), pymupdf.Point(posicao, y),
+                         color=CINZA, width=0.4)
 
 
 def gerar_pdf(cartoes, caminho):

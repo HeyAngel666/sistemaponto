@@ -61,6 +61,10 @@ Ele lembra a última pasta usada e já abre nela na próxima vez.
 | MONTSUL — Montsul Montagens e Locações LTDA | Segunda a sexta | 07:00 às 17:00 (almoço 12:00-13:00) · sexta até 16:00 |
 | VAGNER — Vagner Bento Pereira | Segunda a sábado | 06:00 às 14:20 (almoço 11:00-12:00) |
 
+Cada empresa tem seu próprio modelo de cartão, na pasta `modelo`. O da
+Montsul traz o **espelho da jornada** no rodapé, preenchido a partir do
+horário cadastrado.
+
 As marcações de entrada e saída variam ±5 minutos por dia, para não
 ficarem todas idênticas.
 

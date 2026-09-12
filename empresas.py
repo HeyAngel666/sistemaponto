@@ -23,6 +23,9 @@ EMPRESAS = {
     "MONTSUL": {
         "nome": "MONTSUL MONTAGENS E LOCAÇÕES LTDA",
         "cnpj": "57.066.123/0001-42",
+        # Este modelo traz o espelho da jornada no rodapé
+        "modelo": "CARTÃO PONTO - MONTSUL.xlsx",
+        "espelho_de_jornada": True,
         "dias_trabalhados": [SEGUNDA, TERCA, QUARTA, QUINTA, SEXTA],
         "horario_padrao": {
             "entrada": "07:00",
@@ -45,6 +48,8 @@ EMPRESAS = {
     "VAGNER": {
         "nome": "VAGNER BENTO PEREIRA",
         "cnpj": "39.436.093/0001-37",
+        "modelo": "CARTÃO PONTO - VAGNER.xlsx",
+        "espelho_de_jornada": False,
         "dias_trabalhados": [SEGUNDA, TERCA, QUARTA, QUINTA, SEXTA, SABADO],
         "horario_padrao": {
             "entrada": "06:00",
@@ -89,6 +94,27 @@ def horario_do_dia(empresa, dia_semana):
     horario = dict(empresa["horario_padrao"])
     horario.update(empresa.get("horario_excecoes", {}).get(dia_semana, {}))
     return horario
+
+
+def espelho_de_jornada(empresa):
+    """Quadro da jornada para o rodapé do cartão.
+
+    Devolve uma linha por dia da semana: (dia, entrada, saída, volta, saída).
+    """
+    linhas = []
+    for dia in range(7):
+        if dia == DOMINGO:
+            marcacoes = ["DSR"] * 4
+        elif dia not in empresa["dias_trabalhados"]:
+            marcacoes = ["FOLGA"] * 4
+        else:
+            horario = horario_do_dia(empresa, dia)
+            marcacoes = [
+                horario["entrada"], horario["saida_almoco"],
+                horario["volta_almoco"], horario["saida"],
+            ]
+        linhas.append((NOME_DIA_SEMANA[dia], *marcacoes))
+    return linhas
 
 
 def resumo_jornada(empresa):

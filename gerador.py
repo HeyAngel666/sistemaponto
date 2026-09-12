@@ -7,8 +7,9 @@ horários: agora vêm do cadastro da empresa (empresas.py).
 
 import calendar
 import random
+import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from pathlib import Path
 
 import holidays
@@ -18,6 +19,7 @@ from empresas import (
     DOMINGO,
     NOME_DIA_SEMANA,
     cabecalho_empresa,
+    espelho_de_jornada,
     horario_do_dia,
     obter_empresa,
 )
@@ -40,16 +42,19 @@ def _pasta_de_trabalho():
     return Path(__file__).resolve().parent
 
 
-ARQUIVO_MODELO = _pasta_do_programa() / "modelo" / "MODELO - CARTÃO PONTO.xlsx"
+PASTA_MODELOS = _pasta_do_programa() / "modelo"
 PASTA_SAIDA = _pasta_de_trabalho() / "cartoes"
 
 # Onde a tabela de dias começa na planilha modelo
 LINHA_INICIAL = 6
+LINHA_FINAL = 36
 
 # Células fixas do modelo
 CELULA_EMPRESA = "B2"
 CELULA_NOME = "B3"
-CELULA_MES_ANO = "F3"
+
+# Coluna auxiliar do modelo: duração de cada hora extra, somada no total
+COLUNA_DURACAO = "H"
 
 # Colunas da tabela
 COL_DATA = 1
@@ -59,6 +64,8 @@ COL_ENTRADA_TARDE = 4
 COL_SAIDA_TARDE = 5
 COL_ENTRADA_EXTRA = 6
 COL_SAIDA_EXTRA = 7
+COL_LETRA_ENTRADA_EXTRA = "F"
+COL_LETRA_SAIDA_EXTRA = "G"
 
 # Limites de horas extras por dia (em minutos)
 # 50%: lançadas após a jornada, nos dias úteis
@@ -312,7 +319,9 @@ def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
         linhas.append({"data": data.strftime("%d/%m"), "colunas": colunas})
 
     return {
+        "empresa_codigo": str(empresa_codigo).strip().upper(),
         "empresa": cabecalho_empresa(empresa),
+        "espelho": espelho_de_jornada(empresa) if empresa["espelho_de_jornada"] else None,
         "nome": nome,
         "competencia": f"{MESES_PT[mes]}/{ano}",
         "mes": mes,
@@ -359,29 +368,49 @@ def gerar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
     return salvar_em_excel(cartao, pasta_saida)
 
 
+def modelo_da_empresa(empresa_codigo):
+    empresa = obter_empresa(empresa_codigo)
+    caminho = PASTA_MODELOS / empresa["modelo"]
+    if not caminho.exists():
+        raise FileNotFoundError(f"Planilha modelo não encontrada: {caminho}")
+    return caminho
+
+
+def _como_hora(valor):
+    """Converte 'HH:MM' em hora de verdade, para as fórmulas do modelo somarem."""
+    if isinstance(valor, str) and re.fullmatch(r"\d{1,2}:\d{2}", valor):
+        horas, minutos = valor.split(":")
+        return time(int(horas), int(minutos))
+    return valor
+
+
 def salvar_em_excel(cartao, pasta_saida=None):
     """Grava em Excel um cartão já montado.
 
     Separado da montagem para que o Excel e o PDF do mesmo funcionário
     saiam com as mesmas marcações.
     """
-    if not ARQUIVO_MODELO.exists():
-        raise FileNotFoundError(f"Planilha modelo não encontrada: {ARQUIVO_MODELO}")
-
     mes, ano, nome = cartao["mes"], cartao["ano"], cartao["nome"]
 
-    wb = load_workbook(ARQUIVO_MODELO)
+    wb = load_workbook(modelo_da_empresa(cartao["empresa_codigo"]))
     ws = wb.active
 
     ws[CELULA_EMPRESA] = cartao["empresa"]
     ws[CELULA_NOME] = cartao["nome"]
-    ws[CELULA_MES_ANO] = cartao["competencia"]
 
     for indice, registro in enumerate(cartao["linhas"]):
         linha = LINHA_INICIAL + indice
         set_valor(ws, linha, COL_DATA, registro["data"])
         for coluna, valor in enumerate(registro["colunas"], start=COL_ENTRADA_MANHA):
-            set_valor(ws, linha, coluna, valor)
+            set_valor(ws, linha, coluna, _como_hora(valor))
+
+    # Nos dias de ocorrência as colunas de extra levam texto (DOMINGO, FALTA...),
+    # e a subtração da coluna auxiliar daria erro: o IFERROR mantém o total certo.
+    for linha in range(LINHA_INICIAL, LINHA_FINAL + 1):
+        ws[f"{COLUNA_DURACAO}{linha}"] = (
+            f"=IFERROR({COL_LETRA_SAIDA_EXTRA}{linha}-"
+            f"{COL_LETRA_ENTRADA_EXTRA}{linha},0)"
+        )
 
     # Sem pasta escolhida, organiza por mês dentro da pasta padrão
     pasta = Path(pasta_saida) if pasta_saida else PASTA_SAIDA / f"{ano}-{mes:02d}"
