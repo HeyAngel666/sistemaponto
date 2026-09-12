@@ -8,3 +8,4 @@ cartoes/
 build/
 dist/
 *.spec
+versao.txt

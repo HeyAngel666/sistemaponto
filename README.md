@@ -102,21 +102,25 @@ mudar o horário da Montsul, por exemplo, basta editar:
 ## Instalação (primeira vez)
 
 Baixe o arquivo **`Instalar.bat`** e dê dois cliques nele. Ele cuida de
-tudo: instala o Python e o Git se faltarem, baixa o sistema e cria o
-atalho **"Cartão Ponto"** na Área de Trabalho.
+tudo: instala o Python se faltar, baixa o sistema e cria o atalho
+**"Cartão Ponto"** na Área de Trabalho.
 
 > Se o Windows bloquear o arquivo: clique com o botão direito nele →
 > **Propriedades** → marque **"Desbloquear"** → **OK**.
 
-Se o Python ou o Git precisarem ser instalados, o instalador pede para
-você abri-lo **mais uma vez** ao final — é normal, basta repetir.
+Se o Python precisar ser instalado, o instalador pede para você abri-lo
+**mais uma vez** ao final — é normal, basta repetir.
 
-Depois disso, é só usar o atalho da Área de Trabalho. **O sistema se
-atualiza sozinho** toda vez que você abre.
+Depois disso, é só usar o atalho da Área de Trabalho.
 
-### Atualizar na mão
+### Atualizações
 
-Se quiser forçar uma atualização sem abrir o programa, dê dois cliques em
+**O sistema se atualiza sozinho** toda vez que você abre, baixando a
+versão publicada. Não precisa de Git nem de nada instalado além do
+Python. Sem internet, ele simplesmente abre na versão que já está no
+computador.
+
+Para forçar uma atualização sem abrir o programa, dê dois cliques em
 **`Atualizar Sistema.bat`**, dentro da pasta do sistema.
 
 ## Onde o sistema fica instalado
