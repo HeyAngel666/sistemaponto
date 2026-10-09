@@ -683,8 +683,12 @@ class AplicacaoCartaoPonto:
 
         if montados and gerar_pdf_junto:
             try:
+                # A empresa vai no nome: duas empresas no mesmo mês e na mesma
+                # pasta não podem gravar uma por cima da outra
+                empresas_do_lote = "-".join(sorted({c["empresa_codigo"] for c in montados}))
                 arquivo_pdf = pasta / (
-                    f"Cartões {montados[0]['mes']:02d}-{montados[0]['ano']}.pdf"
+                    f"Cartões {montados[0]['mes']:02d}-{montados[0]['ano']} - "
+                    f"{empresas_do_lote}.pdf"
                 )
                 cartao_pdf.gerar_pdf(montados, arquivo_pdf)
                 self.fila.put(
