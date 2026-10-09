@@ -34,6 +34,10 @@ desligamento saem marcados como DESLIGADO.
    Use sempre o período real, não o número de dias do holerite: a folha
    conta o mês como 30 dias e, quando as férias atravessam um mês de 31, o
    número de dias por mês sai diferente do calendário.
+
+   O período fica **guardado**: nos meses que ele atravessa, as férias já
+   aparecem preenchidas ao abrir o holerite. Fica no arquivo `ferias.json`
+   da pasta do sistema, que a atualização não apaga.
 5. **Gerar todos os cartões**.
 
 Sai **um PDF só com todos os cartões** (uma página por funcionário),
@@ -164,6 +168,7 @@ funciona do mesmo jeito e não é bloqueado.
 | `planilha.py` | Planilha de preenchimento em lote |
 | `holerite.py` | Leitura dos holerites em PDF |
 | `cartao_pdf.py` | Monta o PDF único para impressão |
+| `ferias.py` | Guarda os períodos de férias já informados |
 | `letras_holerite.json` | Tabela que decifra o texto do holerite |
 | `modelo/` | Planilha modelo do cartão |
 | `cartoes/` | Cartões gerados |

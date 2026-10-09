@@ -9,3 +9,6 @@ build/
 dist/
 *.spec
 versao.txt
+
+# Férias digitadas neste computador
+ferias.json

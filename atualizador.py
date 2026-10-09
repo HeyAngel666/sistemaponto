@@ -26,7 +26,7 @@ ARQUIVO_VERSAO = PASTA / "versao.txt"
 TEMPO_LIMITE = 30
 
 # O que nunca é sobrescrito pela atualização
-NAO_ATUALIZAR = {"cartoes", "versao.txt", "__pycache__", ".git"}
+NAO_ATUALIZAR = {"cartoes", "versao.txt", "ferias.json", "__pycache__", ".git"}
 
 
 class SemInternet(Exception):

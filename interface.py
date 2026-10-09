@@ -11,6 +11,7 @@ from tkinter import StringVar, Tk, filedialog, messagebox, simpledialog, ttk
 
 import cartao_pdf
 import empresas as cadastro
+import ferias
 import holerite
 import planilha
 from gerador import MESES_PT, PASTA_SAIDA, ferias_no_mes, montar_cartao, nome_arquivo_seguro
@@ -456,6 +457,7 @@ class AplicacaoCartaoPonto:
             registro["dia_inicio"] = holerite.dia_inicial_por_admissao(registro)
             registro["atestados"] = 0
             registro["inicio_ferias"] = None
+            self._aplicar_ferias_guardadas(registro)
 
         self.registros_holerite = registros
         self._recarregar_lista_holerite()
@@ -484,6 +486,20 @@ class AplicacaoCartaoPonto:
                     "; ".join(registro["avisos"]),
                 ),
             )
+
+    @staticmethod
+    def _aplicar_ferias_guardadas(registro):
+        """Se o período dessa pessoa já foi digitado antes, usa ele."""
+        if not registro.get("dias_ferias") or not registro.get("mes"):
+            return
+        periodo = ferias.periodo_do_mes(
+            registro["empresa_codigo"], registro.get("codigo"), registro["nome"],
+            registro["mes"], registro["ano"],
+        )
+        if periodo:
+            inicio, dias = ferias_no_mes(periodo, registro["mes"], registro["ano"])
+            if dias:
+                registro["inicio_ferias"], registro["dias_ferias"] = inicio, dias
 
     @staticmethod
     def _texto_das_ferias(registro):
@@ -543,6 +559,10 @@ class AplicacaoCartaoPonto:
                 return
             # o período real vale mais que a contagem da folha (mês de 30 dias)
             registro["inicio_ferias"], registro["dias_ferias"] = inicio, dias
+            ferias.guardar(
+                registro["empresa_codigo"], registro.get("codigo"), registro["nome"],
+                resposta, registro["mes"], registro["ano"],
+            )
             self._recarregar_lista_holerite()
             return
 

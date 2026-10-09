@@ -444,6 +444,20 @@ def ferias_no_mes(texto, mes, ano):
     o mês como 30 dias, e num mês de 31 os dias por mês saem diferentes do
     calendário (20/08 a 18/09 vira 11 + 19 na folha, mas são 12 + 18).
     """
+    inicio, fim = ler_periodo(texto, mes, ano)
+    primeiro = datetime(ano, mes, 1)
+    ultimo = datetime(ano, mes, calendar.monthrange(ano, mes)[1])
+    de, ate = max(inicio, primeiro), min(fim, ultimo)
+    if de > ate:
+        return None, 0
+    return de.day, (ate - de).days + 1
+
+
+def ler_periodo(texto, mes, ano):
+    """Datas de início e fim de um período escrito como "20/08 a 18/09".
+
+    Sem ano, vale o período que passa pelo mês/ano do cartão.
+    """
     achado = re.fullmatch(
         r"\s*(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\s*(?:a|até|ate|-)\s*"
         r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\s*",
@@ -472,13 +486,7 @@ def ferias_no_mes(texto, mes, ano):
         raise ValueError(f"O fim das férias vem antes do início em '{texto}'.")
     if (fim - inicio).days + 1 > 30:
         raise ValueError(f"O período '{texto}' passa de 30 dias. Confira as datas.")
-
-    primeiro = datetime(ano, mes, 1)
-    ultimo = datetime(ano, mes, calendar.monthrange(ano, mes)[1])
-    de, ate = max(inicio, primeiro), min(fim, ultimo)
-    if de > ate:
-        return None, 0
-    return de.day, (ate - de).days + 1
+    return inicio, fim
 
 
 def _periodo_de_ferias(dias_ferias, inicio_ferias, dia_inicio, dia_fim, ultimo_dia_mes):
