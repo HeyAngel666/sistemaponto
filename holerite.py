@@ -232,6 +232,8 @@ def ler_holerite(caminho_pdf):
             "nome": "",
             "admissao": "",
             "faltas": 0,
+            "dsr_faltas": 0,
+            "dias_afastamento": 0,
             "horas_extras": 0.0,
             "horas_extras_100": 0.0,
             "dias_ferias": 0,
@@ -252,6 +254,14 @@ def ler_holerite(caminho_pdf):
 
             if linha.startswith("Admissão:"):
                 registro["admissao"] = linha.replace("Admissão:", "").strip()
+
+            if "DSR" in linha and re.search(r"\bFALTA$", linha):
+                registro["dsr_faltas"] = _numero_seguinte(linhas, indice)
+
+            if "AFASTAMENTO" in linha and indice + 1 < len(linhas):
+                dias = re.fullmatch(r"(\d{1,2})/\d{2}", linhas[indice + 1])
+                if dias:
+                    registro["dias_afastamento"] = int(dias.group(1))
 
             if re.search(r"\bFALTAS$", linha):
                 registro["faltas"] = _numero_seguinte(linhas, indice)

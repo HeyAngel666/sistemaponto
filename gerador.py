@@ -7,6 +7,7 @@ horários: agora vêm do cadastro da empresa (empresas.py).
 
 import calendar
 import random
+from itertools import combinations
 import re
 import sys
 from datetime import datetime, time, timedelta
@@ -215,7 +216,8 @@ def distribuir_exato(total_minutos, dias_validos,
 # =====================================
 def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
                   atestados=0, dia_inicio=1, dia_fim=None, horas_extras_100=0,
-                  dias_ferias=0, inicio_ferias=None):
+                  dias_ferias=0, inicio_ferias=None, dsr_faltas=0,
+                  dias_afastamento=0):
     """Monta o conteúdo do cartão (sem gravar arquivo).
 
     É a fonte única do que vai para o Excel e para o PDF.
@@ -223,6 +225,9 @@ def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
     horas_extras      -> extras de 50%, lançadas após a jornada dos dias úteis
     horas_extras_100  -> extras de 100%, lançadas em domingos e feriados
     dias_ferias       -> dias corridos de férias, a partir de inicio_ferias
+    dsr_faltas        -> quantos DSR o holerite descontou por falta; as faltas
+                         são distribuídas para dar exatamente esse desconto
+    dias_afastamento  -> dias corridos de afastamento informados no holerite
 
     dia_inicio / dia_fim delimitam o período ativo no mês (admissão e
     desligamento).
@@ -246,18 +251,31 @@ def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
             f"Dia final deve estar entre {dia_inicio} e {ultimo_dia_mes}."
         )
 
+    avisos = []
     dias_de_ferias = _periodo_de_ferias(
         dias_ferias, inicio_ferias, dia_inicio, dia_fim, ultimo_dia_mes
     )
 
     dias_trabalhados = empresa["dias_trabalhados"]
 
-    # Dias em que o funcionário deveria trabalhar (sem feriados e sem férias)
+    dias_de_afastamento = _periodo_de_afastamento(
+        dias_afastamento, dia_inicio, dia_fim, dias_de_ferias, dias_trabalhados, ano, mes
+    )
+    fora_do_trabalho = dias_de_ferias | dias_de_afastamento
+
+    # Dias em que o funcionário deveria trabalhar (sem feriados, férias e afastamento)
     dias_uteis = [
         d for d in range(dia_inicio, dia_fim + 1)
         if datetime(ano, mes, d).weekday() in dias_trabalhados
         and datetime(ano, mes, d).date() not in FERIADOS_BR
-        and d not in dias_de_ferias
+        and d not in fora_do_trabalho
+    ]
+
+    # Feriados em que ele estaria à disposição: quem falta na semana perde
+    # também o feriado dela (Lei 605/49), e isso entra no desconto de DSR
+    feriados_no_periodo = [
+        d for d in range(dia_inicio, dia_fim + 1)
+        if datetime(ano, mes, d).date() in FERIADOS_BR and d not in fora_do_trabalho
     ]
 
     if faltas + atestados > len(dias_uteis):
@@ -267,7 +285,9 @@ def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
         )
 
     disponiveis = dias_uteis[:]
-    dias_falta = random.sample(disponiveis, min(faltas, len(disponiveis)))
+    dias_falta = sortear_faltas(
+        disponiveis, faltas, dsr_faltas, ano, mes, feriados_no_periodo, avisos
+    )
     for d in dias_falta:
         disponiveis.remove(d)
 
@@ -284,7 +304,7 @@ def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
         d for d in range(dia_inicio, dia_fim + 1)
         if (datetime(ano, mes, d).weekday() == DOMINGO
             or datetime(ano, mes, d).date() in FERIADOS_BR)
-        and d not in dias_de_ferias
+        and d not in fora_do_trabalho
     ]
     extras_100 = distribuir_exato(
         int(round(horas_extras_100 * 60)), dias_100_possiveis,
@@ -305,6 +325,8 @@ def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
             colunas = _ocorrencia("DESLIGADO")
         elif d in dias_de_ferias:
             colunas = _ocorrencia("FÉRIAS")
+        elif d in dias_de_afastamento:
+            colunas = _ocorrencia("AFASTAMENTO")
         elif extras_100.get(d, 0) > 0:
             colunas = _marcacoes_de_cem_por_cento(data, empresa, extras_100[d])
         elif dia_semana == DOMINGO or dia_semana not in dias_trabalhados:
@@ -329,7 +351,81 @@ def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
         "mes": mes,
         "ano": ano,
         "linhas": linhas,
+        "avisos": avisos,
     }
+
+
+def sortear_faltas(disponiveis, faltas, dsr_faltas, ano, mes, feriados=(), avisos=None):
+    """Escolhe os dias de falta de forma que o cartão gere o DSR do holerite.
+
+    Quem falta numa semana perde o repouso daquela semana e também os
+    feriados dela (Lei 605/49, art. 6º). A folha desconta um DSR para cada um,
+    então: DSR = semanas com falta + feriados dentro dessas semanas.
+    Domingo nunca é dia útil, então segunda a sábado de uma semana sempre
+    ficam juntos, qualquer que seja o dia em que se considere o início dela.
+    """
+    faltas = min(int(faltas or 0), len(disponiveis))
+    alvo = int(dsr_faltas or 0)
+    if not faltas:
+        return []
+    if not alvo:
+        return random.sample(disponiveis, faltas)
+
+    def semana(dia):
+        return datetime(ano, mes, dia).isocalendar()[1]
+
+    semanas = {}
+    for dia in disponiveis:
+        semanas.setdefault(semana(dia), []).append(dia)
+    feriados_por_semana = {}
+    for dia in feriados:
+        feriados_por_semana[semana(dia)] = feriados_por_semana.get(semana(dia), 0) + 1
+
+    validas = [
+        grupo
+        for tamanho in range(1, min(faltas, len(semanas)) + 1)
+        for grupo in combinations(semanas, tamanho)
+        if tamanho + sum(feriados_por_semana.get(s, 0) for s in grupo) == alvo
+        and sum(len(semanas[s]) for s in grupo) >= faltas
+    ]
+    if not validas:
+        if avisos is not None:
+            avisos.append(
+                f"não foi possível distribuir {faltas} falta(s) de modo a dar "
+                f"{alvo} DSR; as faltas foram sorteadas sem essa regra"
+            )
+        return random.sample(disponiveis, faltas)
+
+    escolhidas = random.choice(validas)
+    # uma falta garantida em cada semana escolhida; o resto, dentro delas
+    dias = [random.choice(semanas[s]) for s in escolhidas]
+    restantes = [d for s in escolhidas for d in semanas[s] if d not in dias]
+    return dias + random.sample(restantes, faltas - len(dias))
+
+
+def _periodo_de_afastamento(dias_afastamento, dia_inicio, dia_fim, dias_de_ferias,
+                            dias_trabalhados, ano, mes):
+    """Dias corridos de afastamento, num bloco só.
+
+    O holerite informa quantos dias, não quais. O bloco começa num dia de
+    trabalho e não se sobrepõe às férias.
+    """
+    dias_afastamento = int(dias_afastamento or 0)
+    if dias_afastamento <= 0:
+        return set()
+
+    inicios = [
+        d for d in range(dia_inicio, dia_fim - dias_afastamento + 2)
+        if datetime(ano, mes, d).weekday() in dias_trabalhados
+        and datetime(ano, mes, d).date() not in FERIADOS_BR
+        and not dias_de_ferias & set(range(d, d + dias_afastamento))
+    ]
+    if not inicios:
+        raise ValueError(
+            f"Não cabem {dias_afastamento} dia(s) de afastamento no período do cartão."
+        )
+    inicio = random.choice(inicios)
+    return set(range(inicio, inicio + dias_afastamento))
 
 
 def _ocorrencia(texto):

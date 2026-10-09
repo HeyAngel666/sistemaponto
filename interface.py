@@ -581,6 +581,8 @@ class AplicacaoCartaoPonto:
                 "horas_extras": r["horas_extras"],
                 "horas_extras_100": r["horas_extras_100"],
                 "faltas": r["faltas"],
+                "dsr_faltas": r.get("dsr_faltas", 0),
+                "dias_afastamento": r.get("dias_afastamento", 0),
                 "atestados": r.get("atestados", 0),
                 "dia_inicio": r["dia_inicio"],
                 "dia_fim": calendar.monthrange(r["ano"], r["mes"])[1],
@@ -656,8 +658,10 @@ class AplicacaoCartaoPonto:
             dados = {c: v for c, v in registro.items() if c != "pasta_saida"}
             nome = dados["nome"]
             try:
-                montados.append(montar_cartao(**dados))
-                self.fila.put(("linha", nome, "OK"))
+                cartao = montar_cartao(**dados)
+                montados.append(cartao)
+                situacao = "OK" if not cartao["avisos"] else "ATENÇÃO: " + "; ".join(cartao["avisos"])
+                self.fila.put(("linha", nome, situacao))
             except Exception as erro:
                 self.fila.put(("linha", nome, f"ERRO: {erro}"))
                 falhas += 1

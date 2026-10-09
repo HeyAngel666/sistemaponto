@@ -94,6 +94,11 @@ mudar o horário da Montsul, por exemplo, basta editar:
 - **Horas extras de 100%** lançadas em domingos e feriados, como dia
   trabalhado: entrada no horário normal da empresa, até 8 h por dia
 - **Faltas** e **atestados** sorteados entre os dias úteis do período
+- **Faltas distribuídas para bater com o DSR do holerite**: cada semana com
+  falta perde o domingo e os feriados dela (Lei 605/49), então as faltas caem
+  em semanas que dão exatamente o "DESCONTO DSR S/ FALTA" da folha
+- **Afastamento** lido do holerite ("DIAS AFASTAMENTO") e marcado em dias
+  corridos
 - **Férias** marcadas em dias corridos, a partir do dia informado
 - Dias antes da admissão saem como **ADMITIDO EM DD/MM**, e depois do
   desligamento como **DESLIGADO**
