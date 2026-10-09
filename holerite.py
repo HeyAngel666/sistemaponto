@@ -105,13 +105,27 @@ def ler_paginas(caminho_pdf):
                         texto.append(letra)
                 conteudo = "".join(texto).strip()
                 if conteudo:
-                    linhas.append(conteudo)
+                    linhas.append((linha["bbox"][1], conteudo))
 
-        # cada página traz a mesma via duas vezes
-        paginas.append(list(dict.fromkeys(linhas)))
+        paginas.append(_primeira_via(linhas))
 
     doc.close()
     return paginas, nao_reconhecidas
+
+
+def _primeira_via(linhas):
+    """Cada página traz o mesmo holerite duas vezes, uma embaixo da outra.
+
+    Separa pela posição: fica só o que está acima do título da segunda via.
+    (Remover linhas repetidas não serve: dentro do mesmo holerite valores
+    iguais aparecem em rubricas diferentes, como falta e DSR.)
+    """
+    titulos = sorted(y for y, texto in linhas if texto.startswith("Recibo de Pagamento"))
+    if len(titulos) < 2:
+        return [texto for _, texto in linhas]
+    # o nome da empresa fica um pouco acima do título; a folga pega ele junto
+    corte = titulos[1] - 20
+    return [texto for y, texto in linhas if y < corte]
 
 
 def _empresa_pelo_cnpj(linhas):

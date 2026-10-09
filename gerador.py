@@ -234,7 +234,9 @@ def montar_cartao(empresa_codigo, nome, mes, ano, horas_extras=0, faltas=0,
         raise ValueError("Horas extras de 100% não podem ser negativas.")
 
     ultimo_dia_mes = calendar.monthrange(ano, mes)[1]
-    dia_fim = ultimo_dia_mes if dia_fim in (None, "") else int(dia_fim)
+    # Um "31" num mês de 30 dias (ex: campo que ficou do mês anterior)
+    # só pode querer dizer "até o fim do mês"
+    dia_fim = ultimo_dia_mes if dia_fim in (None, "") else min(int(dia_fim), ultimo_dia_mes)
     dia_inicio = int(dia_inicio or 1)
 
     if not 1 <= dia_inicio <= ultimo_dia_mes:
