@@ -13,7 +13,7 @@ import cartao_pdf
 import empresas as cadastro
 import holerite
 import planilha
-from gerador import MESES_PT, PASTA_SAIDA, montar_cartao, nome_arquivo_seguro
+from gerador import MESES_PT, PASTA_SAIDA, ferias_no_mes, montar_cartao, nome_arquivo_seguro
 
 COR_FUNDO = "#F4F6F8"
 COR_CABECALHO = "#37474F"
@@ -491,7 +491,10 @@ class AplicacaoCartaoPonto:
         if not dias:
             return ""
         inicio = registro.get("inicio_ferias")
-        return f"{dias}d a partir de {inicio}" if inicio else f"{dias}d — informar"
+        if not inicio:
+            return f"{dias}d — informar"
+        fim = int(inicio) + dias - 1
+        return f"{int(inicio):02d} a {fim:02d}/{registro['mes']:02d} ({dias}d)"
 
     def _editar_celula_holerite(self, evento):
         """Duplo clique em Faltas, Horas extras ou Dia inicial edita o valor."""
@@ -505,7 +508,7 @@ class AplicacaoCartaoPonto:
             "#3": ("horas_extras", "Horas extras de 50%"),
             "#4": ("horas_extras_100", "Horas extras de 100%"),
             "#5": ("dia_inicio", "Dia inicial"),
-            "#6": ("inicio_ferias", "Dia em que as férias começam"),
+            "#6": ("inicio_ferias", "Período das férias (ex: 20/08 a 18/09)"),
         }[coluna]
 
         registro = self.registros_holerite[int(item)]
@@ -524,6 +527,23 @@ class AplicacaoCartaoPonto:
             parent=self.janela,
         )
         if resposta is None:
+            return
+
+        if campo == "inicio_ferias" and "/" in resposta:
+            try:
+                inicio, dias = ferias_no_mes(resposta, registro["mes"], registro["ano"])
+            except ValueError as erro:
+                messagebox.showerror("Período inválido", str(erro))
+                return
+            if not dias:
+                messagebox.showerror(
+                    "Período fora do mês",
+                    f"O período {resposta} não passa pelo mês deste holerite.",
+                )
+                return
+            # o período real vale mais que a contagem da folha (mês de 30 dias)
+            registro["inicio_ferias"], registro["dias_ferias"] = inicio, dias
+            self._recarregar_lista_holerite()
             return
 
         try:

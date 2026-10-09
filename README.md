@@ -27,8 +27,13 @@ desligamento saem marcados como DESLIGADO.
    **100%** (domingos e feriados). Para corrigir qualquer valor, dê
    **dois cliques** na célula.
 4. Quem estiver de **férias** aparece com os dias na coluna Férias. Dê
-   dois cliques nela para informar o dia em que começam — sem isso, o
-   cartão dessa pessoa não é gerado.
+   dois cliques nela e digite o **período do aviso de férias**, por exemplo
+   `20/08 a 18/09` — o sistema calcula sozinho os dias de cada mês. Sem
+   isso, o cartão dessa pessoa não é gerado.
+
+   Use sempre o período real, não o número de dias do holerite: a folha
+   conta o mês como 30 dias e, quando as férias atravessam um mês de 31, o
+   número de dias por mês sai diferente do calendário.
 5. **Gerar todos os cartões**.
 
 Sai **um PDF só com todos os cartões** (uma página por funcionário),

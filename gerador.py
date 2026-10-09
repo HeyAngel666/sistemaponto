@@ -433,6 +433,54 @@ def _ocorrencia(texto):
     return [texto] * 6
 
 
+def ferias_no_mes(texto, mes, ano):
+    """Converte o período real de férias nos dias que caem neste mês.
+
+    Aceita "20/08 a 18/09" ou "20/08/2026 a 18/09/2026". Devolve
+    (dia de início, quantidade de dias) dentro do mês, ou (None, 0) se o
+    período não passa por ele.
+
+    Use o período do aviso de férias, não o número do holerite: a folha conta
+    o mês como 30 dias, e num mês de 31 os dias por mês saem diferentes do
+    calendário (20/08 a 18/09 vira 11 + 19 na folha, mas são 12 + 18).
+    """
+    achado = re.fullmatch(
+        r"\s*(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\s*(?:a|até|ate|-)\s*"
+        r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\s*",
+        str(texto).lower(),
+    )
+    if not achado:
+        raise ValueError(f"Período não reconhecido: '{texto}'. Use por exemplo 20/08 a 18/09.")
+
+    d1, m1, a1, d2, m2, a2 = achado.groups()
+
+    def ano_completo(valor, padrao):
+        if not valor:
+            return padrao
+        return int(valor) + 2000 if len(valor) == 2 else int(valor)
+
+    # Sem ano: o início é o mais recente até o mês do cartão, e o fim vem
+    # logo depois do início (no mesmo ano, ou no seguinte se virar o ano)
+    a1 = ano_completo(a1, ano if int(m1) <= mes else ano - 1)
+    a2 = ano_completo(a2, a1 if int(m2) >= int(m1) else a1 + 1)
+    try:
+        inicio = datetime(a1, int(m1), int(d1))
+        fim = datetime(a2, int(m2), int(d2))
+    except ValueError:
+        raise ValueError(f"Data inválida no período '{texto}'.") from None
+    if fim < inicio:
+        raise ValueError(f"O fim das férias vem antes do início em '{texto}'.")
+    if (fim - inicio).days + 1 > 30:
+        raise ValueError(f"O período '{texto}' passa de 30 dias. Confira as datas.")
+
+    primeiro = datetime(ano, mes, 1)
+    ultimo = datetime(ano, mes, calendar.monthrange(ano, mes)[1])
+    de, ate = max(inicio, primeiro), min(fim, ultimo)
+    if de > ate:
+        return None, 0
+    return de.day, (ate - de).days + 1
+
+
 def _periodo_de_ferias(dias_ferias, inicio_ferias, dia_inicio, dia_fim, ultimo_dia_mes):
     dias_ferias = int(dias_ferias or 0)
     if dias_ferias <= 0:
