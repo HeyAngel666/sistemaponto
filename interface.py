@@ -7,13 +7,13 @@ import sys
 import threading
 from datetime import date
 from pathlib import Path
-from tkinter import BooleanVar, StringVar, Tk, filedialog, messagebox, simpledialog, ttk
+from tkinter import StringVar, Tk, filedialog, messagebox, simpledialog, ttk
 
 import cartao_pdf
 import empresas as cadastro
 import holerite
 import planilha
-from gerador import MESES_PT, PASTA_SAIDA, gerar_cartao, montar_cartao, salvar_em_excel
+from gerador import MESES_PT, PASTA_SAIDA, montar_cartao, nome_arquivo_seguro
 
 COR_FUNDO = "#F4F6F8"
 COR_CABECALHO = "#37474F"
@@ -36,7 +36,6 @@ class AplicacaoCartaoPonto:
 
         self.fila = queue.Queue()
         self.ultima_pasta = PASTA_SAIDA
-        self.var_pdf = BooleanVar(value=True)
 
         self._configurar_estilo()
         self._montar_cabecalho()
@@ -288,12 +287,6 @@ class AplicacaoCartaoPonto:
         )
         self.btn_salvar_planilha.pack(side="left", padx=(10, 0))
 
-        ttk.Checkbutton(
-            pai,
-            text="Gerar também um PDF único com todos os cartões, pronto para imprimir",
-            variable=self.var_pdf,
-        ).pack(anchor="w", pady=(12, 0))
-
         quadro = ttk.Labelframe(pai, text=" Funcionários encontrados ", padding=10)
         quadro.pack(fill="both", expand=True, pady=(16, 0))
 
@@ -349,12 +342,6 @@ class AplicacaoCartaoPonto:
             command=self.importar_planilha,
         )
         self.btn_importar.pack(side="left", padx=(10, 0))
-
-        ttk.Checkbutton(
-            pai,
-            text="Gerar também um PDF único com todos os cartões, pronto para imprimir",
-            variable=self.var_pdf,
-        ).pack(anchor="w", pady=(12, 0))
 
         resultado = ttk.Labelframe(pai, text=" Resultado ", padding=10)
         resultado.pack(fill="both", expand=True, pady=(16, 0))
@@ -420,8 +407,7 @@ class AplicacaoCartaoPonto:
                 self._status("Geração cancelada.")
                 return
 
-            caminho = gerar_cartao(
-                pasta_saida=pasta,
+            cartao = montar_cartao(
                 empresa_codigo=self.var_empresa.get(),
                 nome=self.entry_nome.get().strip(),
                 mes=mes,
@@ -434,6 +420,10 @@ class AplicacaoCartaoPonto:
                 dia_fim=int(self._numero(self.entry_fim.get(), "Dia final", padrao=ultimo_dia)),
                 dias_ferias=int(self._numero(self.entry_ferias.get(), "Férias")),
                 inicio_ferias=self.entry_inicio_ferias.get().strip() or None,
+            )
+            caminho = cartao_pdf.gerar_pdf(
+                [cartao],
+                pasta / f"{nome_arquivo_seguro(cartao['nome'])} - {mes:02d}-{ano}.pdf",
             )
 
             self._status(f"Cartão gerado: {caminho}")
@@ -602,7 +592,7 @@ class AplicacaoCartaoPonto:
 
         self.btn_importar.configure(state="disabled")
         threading.Thread(
-            target=self._processar_lote, args=(trabalhos, self.var_pdf.get()), daemon=True
+            target=self._processar_lote, args=(trabalhos,), daemon=True
         ).start()
 
     def criar_planilha_modelo(self):
@@ -650,54 +640,50 @@ class AplicacaoCartaoPonto:
         self.lista_resultado.delete(*self.lista_resultado.get_children())
         self.btn_importar.configure(state="disabled")
         threading.Thread(
-            target=self._processar_lote, args=(registros, self.var_pdf.get()), daemon=True
+            target=self._processar_lote, args=(registros,), daemon=True
         ).start()
 
-    def _processar_lote(self, registros, gerar_pdf_junto):
+    def _processar_lote(self, registros):
         """Roda fora da tela; manda os resultados pela fila.
 
         Nada aqui pode ler ou escrever na tela — nem variáveis do tkinter.
+        Os cartões saem todos num PDF só, um por página.
         """
-        gerados = falhas = 0
+        falhas = 0
         montados = []
 
         for registro in registros:
             dados = {c: v for c, v in registro.items() if c != "pasta_saida"}
             nome = dados["nome"]
             try:
-                # monta uma vez só: o Excel e o PDF saem iguais
-                cartao = montar_cartao(**dados)
-                arquivo = salvar_em_excel(cartao, registro.get("pasta_saida"))
-                montados.append(cartao)
-                self.fila.put(("linha", nome, f"Gerado: {Path(arquivo).name}"))
-                gerados += 1
+                montados.append(montar_cartao(**dados))
+                self.fila.put(("linha", nome, "OK"))
             except Exception as erro:
                 self.fila.put(("linha", nome, f"ERRO: {erro}"))
                 falhas += 1
 
             self.fila.put(
-                ("status", f"Processando... {gerados + falhas}/{len(registros)}")
+                ("status", f"Processando... {len(montados) + falhas}/{len(registros)}")
             )
 
         pasta = Path(registros[0].get("pasta_saida") or PASTA_SAIDA)
+        arquivo_pdf = None
 
-        if montados and gerar_pdf_junto:
+        if montados:
             try:
                 # A empresa vai no nome: duas empresas no mesmo mês e na mesma
                 # pasta não podem gravar uma por cima da outra
                 empresas_do_lote = "-".join(sorted({c["empresa_codigo"] for c in montados}))
-                arquivo_pdf = pasta / (
+                arquivo_pdf = cartao_pdf.gerar_pdf(montados, pasta / (
                     f"Cartões {montados[0]['mes']:02d}-{montados[0]['ano']} - "
                     f"{empresas_do_lote}.pdf"
-                )
-                cartao_pdf.gerar_pdf(montados, arquivo_pdf)
-                self.fila.put(
-                    ("linha", "— PDF —", f"{len(montados)} cartões em {arquivo_pdf.name}")
-                )
+                ))
             except Exception as erro:
                 self.fila.put(("linha", "— PDF —", f"ERRO: {erro}"))
+                falhas += len(montados)
+                montados = []
 
-        self.fila.put(("fim", gerados, falhas, pasta))
+        self.fila.put(("fim", len(montados), falhas, arquivo_pdf or pasta))
 
     def _consumir_fila(self):
         """Só a tela mexe na tela: lê o que as gerações produziram."""
@@ -720,7 +706,7 @@ class AplicacaoCartaoPonto:
                     messagebox.showinfo(
                         "Geração concluída",
                         f"{gerados} cartão(ões) gerado(s).\n{falhas} com erro.\n\n"
-                        f"Pasta: {pasta}",
+                        f"Arquivo: {pasta}",
                     )
         except queue.Empty:
             pass

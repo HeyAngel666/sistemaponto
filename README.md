@@ -1,6 +1,6 @@
 # Sistema de Cartão Ponto
 
-Gera os cartões ponto mensais em Excel, já no formato usado pelas empresas.
+Gera os cartões ponto mensais em PDF, já no formato usado pelas empresas.
 
 ---
 
@@ -31,9 +31,9 @@ desligamento saem marcados como DESLIGADO.
    cartão dessa pessoa não é gerado.
 5. **Gerar todos os cartões**.
 
-Além dos arquivos individuais em Excel, sai um **PDF único com todos os
-cartões** (uma página por funcionário), pronto para mandar direto para a
-impressora. Se não quiser o PDF, é só desmarcar a opção.
+Sai **um PDF só com todos os cartões** (uma página por funcionário),
+pronto para mandar direto para a impressora. O nome do arquivo leva o mês
+e a empresa, por exemplo `Cartões 09-2026 - VAGNER.pdf`.
 
 Se preferir conferir antes, use **Salvar planilha para conferir**: sai a
 planilha já preenchida, você ajusta no Excel e importa pela aba
@@ -150,7 +150,7 @@ funciona do mesmo jeito e não é bloqueado.
 | `main.py` | Abre o programa |
 | `interface.py` | A tela |
 | `empresas.py` | Cadastro das empresas e horários |
-| `gerador.py` | Monta o cartão em Excel |
+| `gerador.py` | Monta o conteúdo do cartão |
 | `planilha.py` | Planilha de preenchimento em lote |
 | `holerite.py` | Leitura dos holerites em PDF |
 | `cartao_pdf.py` | Monta o PDF único para impressão |
