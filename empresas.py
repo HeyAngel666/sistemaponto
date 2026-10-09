@@ -65,6 +65,27 @@ EMPRESAS = {
             "saida": True,
         },
     },
+    "AGROBENTO": {
+        "nome": "AGRO BENTO SERVICOS AGRICOLA LTDA",
+        "cnpj": "63.682.556/0001-25",
+        # Mesma jornada e mesmo modelo de cartão da Vagner Bento Pereira
+        "modelo": "CARTÃO PONTO - VAGNER.xlsx",
+        "espelho_de_jornada": False,
+        "dias_trabalhados": [SEGUNDA, TERCA, QUARTA, QUINTA, SEXTA, SABADO],
+        "horario_padrao": {
+            "entrada": "06:00",
+            "saida_almoco": "11:00",
+            "volta_almoco": "12:00",
+            "saida": "14:20",
+        },
+        "horario_excecoes": {},
+        "variacoes": {
+            "entrada": True,
+            "saida_almoco": False,
+            "volta_almoco": False,
+            "saida": True,
+        },
+    },
 }
 
 
